@@ -666,11 +666,18 @@ function renderDashboard() {
     const isQ = predQ && p.fecha === predQ.fecha;
     const rowStyle = isQ ? 'background:rgba(79,156,249,0.06);' : '';
 
+    const momStr = p.momentum_diario != null
+      ? (p.momentum_diario >= 0 ? '+' : '') + p.momentum_diario.toFixed(2)
+      : '';
+    const momCls = p.momentum_diario > 0.1 ? 'style="color:var(--red)"'
+                 : p.momentum_diario < -0.1 ? 'style="color:var(--green)"'
+                 : 'style="color:var(--text3)"';
     return `<tr style="${rowStyle}">
       <td><span class="pred-date">${label}${isQ ? ' <span style="color:var(--accent);font-size:10px">◀ QUINCENA</span>' : ''}</span></td>
       <td><span class="pred-val ${cls}">${fmt(p.compra_estimada)}</span></td>
       <td><span class="pred-diff ${diffCls}">${ico} ${diff>=0?'+':''}${fmtN(diff)}</span></td>
-      <td style="min-width:80px"><div class="mini-bar"><div class="mini-bar-fill" style="width:${pct}%"></div></div></td>
+      <td><span class="pred-date" ${momCls}>${momStr}</span></td>
+      <td style="min-width:60px"><div class="mini-bar"><div class="mini-bar-fill" style="width:${pct}%"></div></div></td>
     </tr>`;
   }).join('');
 
@@ -814,7 +821,8 @@ function renderDashboard() {
               <th>Fecha</th>
               <th>Compra estimada</th>
               <th>Variación</th>
-              <th>Nivel vs 90d</th>
+              <th>Momentum</th>
+              <th>Nivel vs 30d</th>
             </tr>
           </thead>
           <tbody>${predRows}</tbody>
@@ -858,6 +866,24 @@ function renderChart(days) {
   const allLabels  = [...hLabels, ...pLabels];
   const compraData = [...hist.map(d => d.compra), ...new Array(pLabels.length).fill(null)];
   const ventaData  = [...hist.map(d => d.venta),  ...new Array(pLabels.length).fill(null)];
+
+  // Calcular EMA sobre datos históricos para el gráfico
+  function calcEMA(arr, k) {
+    const period = k;
+    const alpha = 2 / (period + 1);
+    const result = [];
+    let prev = null;
+    for (const v of arr) {
+      if (v == null) { result.push(null); continue; }
+      if (prev === null) { prev = v; result.push(Math.round(v * 100) / 100); continue; }
+      prev = v * alpha + prev * (1 - alpha);
+      result.push(Math.round(prev * 100) / 100);
+    }
+    return result;
+  }
+  const rawCompra = hist.map(d => d.compra);
+  const ema7Data  = calcEMA(rawCompra, 7);
+  const ema14Data = calcEMA(rawCompra, 14);
   const predData   = [
     ...new Array(hLabels.length - 1).fill(null),
     hist[hist.length-1]?.compra ?? null,
@@ -923,6 +949,28 @@ function renderChart(days) {
           borderDash: [3,4],
           fill: false,
           tension: 0,
+          pointRadius: 0,
+        },
+        {
+          label: 'EMA-7',
+          data: [...ema7Data, ...new Array(pLabels.length).fill(null)],
+          borderColor: 'rgba(160,100,255,0.7)',
+          backgroundColor: 'transparent',
+          borderWidth: 1.5,
+          borderDash: [2,3],
+          fill: false,
+          tension: 0.3,
+          pointRadius: 0,
+        },
+        {
+          label: 'EMA-14',
+          data: [...ema14Data, ...new Array(pLabels.length).fill(null)],
+          borderColor: 'rgba(255,160,50,0.5)',
+          backgroundColor: 'transparent',
+          borderWidth: 1.5,
+          borderDash: [2,3],
+          fill: false,
+          tension: 0.3,
           pointRadius: 0,
         },
       ],
