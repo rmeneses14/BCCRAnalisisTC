@@ -635,8 +635,14 @@ function setStatus(s) {
 // ── Render ────────────────────────────────────────────────────────────────
 function renderDashboard() {
   const a = analisis;
-  const sc = a.señal === 'COMPRAR' ? 'comprar' : a.señal === 'ESPERAR' ? 'esperar' : 'neutral';
-  const si = a.señal === 'COMPRAR' ? '🟢' : a.señal === 'ESPERAR' ? '🔴' : '🟡';
+  const sc = a.señal === 'VENDER' ? 'comprar'
+           : a.señal === 'VENDER PRONTO' ? 'neutral'
+           : a.señal === 'ESPERAR' ? 'esperar'
+           : 'neutral';
+  const si = a.señal === 'VENDER' ? '💰'
+           : a.señal === 'VENDER PRONTO' ? '⚡'
+           : a.señal === 'ESPERAR' ? '⏳'
+           : '🔍';
 
   const tendIcon  = a.tendencia_7d === 'alza' ? '↑' : a.tendencia_7d === 'baja' ? '↓' : '→';
   const tendClass = a.tendencia_7d === 'alza' ? 'chip-up' : a.tendencia_7d === 'baja' ? 'chip-down' : 'chip-flat';
@@ -696,7 +702,7 @@ function renderDashboard() {
     <div class="signal-hero ${sc}">
       <div class="signal-top">
         <div>
-          <div class="signal-eyebrow">Recomendación quincenal · USD/CRC</div>
+          <div class="signal-eyebrow">¿Cuándo vender sus dólares? · Precio de venta USD/CRC</div>
           <div class="signal-badge">${a.señal}</div>
         </div>
         <div class="signal-icon">${si}</div>
@@ -704,20 +710,20 @@ function renderDashboard() {
       <div class="signal-detail">${a.señal_detalle}</div>
       <div class="signal-metrics">
         <div class="signal-metric">
-          <div class="signal-metric-label">Mín. 90 días</div>
-          <div class="signal-metric-val green">${fmt(a.minimo_compra_90d)}</div>
+          <div class="signal-metric-label">Venta hoy</div>
+          <div class="signal-metric-val ${a.precio_venta_hoy > a.promedio_venta_30d ? 'green' : 'red'}">${fmt(a.precio_venta_hoy)}</div>
         </div>
         <div class="signal-metric">
-          <div class="signal-metric-label">Prom. 30 días</div>
-          <div class="signal-metric-val accent">${fmt(a.promedio_compra_30d)}</div>
+          <div class="signal-metric-label">Prom. venta 30d</div>
+          <div class="signal-metric-val accent">${fmt(a.promedio_venta_30d)}</div>
         </div>
         <div class="signal-metric">
-          <div class="signal-metric-label">Prom. 90 días</div>
-          <div class="signal-metric-val accent">${fmt(a.promedio_compra_90d)}</div>
+          <div class="signal-metric-label">Mín. venta 30d</div>
+          <div class="signal-metric-val red">${fmt(a.minimo_compra_90d)}</div>
         </div>
         <div class="signal-metric">
-          <div class="signal-metric-label">Máx. 90 días</div>
-          <div class="signal-metric-val red">${fmt(a.maximo_compra_90d)}</div>
+          <div class="signal-metric-label">Máx. venta 30d</div>
+          <div class="signal-metric-val green">${fmt(a.maximo_compra_90d)}</div>
         </div>
         <div class="signal-metric">
           <div class="signal-metric-label">Actualizado</div>
@@ -729,17 +735,17 @@ function renderDashboard() {
     <!-- KPIs -->
     <div class="kpi-grid">
       <div class="kpi" id="k0">
-        <div class="kpi-label">Compra hoy</div>
-        <div class="kpi-val">${fmt(a.precio_compra_hoy)}</div>
-        <div class="kpi-sub">Promedio sistema BCCR</div>
-        <span class="kpi-chip ${diffClass === 'green' ? 'chip-down' : diffClass === 'red' ? 'chip-up' : 'chip-flat'}">
-          ${diffSign}${fmtN(diffVsProm)} vs prom. 30d
+        <div class="kpi-label">💰 Venta hoy — lo que recibís</div>
+        <div class="kpi-val ${a.precio_venta_hoy > a.promedio_venta_30d ? 'up' : 'down'}">${fmt(a.precio_venta_hoy)}</div>
+        <div class="kpi-sub">Por cada dólar que vendás hoy</div>
+        <span class="kpi-chip ${a.precio_venta_hoy >= a.promedio_venta_30d ? 'chip-down' : 'chip-up'}">
+          ${a.precio_venta_hoy >= a.promedio_venta_30d ? '↑ Sobre' : '↓ Bajo'} promedio 30d
         </span>
       </div>
       <div class="kpi" id="k1">
-        <div class="kpi-label">Venta hoy</div>
-        <div class="kpi-val">${fmt(a.precio_venta_hoy)}</div>
-        <div class="kpi-sub">Promedio sistema BCCR</div>
+        <div class="kpi-label">Compra hoy (referencia)</div>
+        <div class="kpi-val" style="font-size:16px;color:var(--text3)">${fmt(a.precio_compra_hoy)}</div>
+        <div class="kpi-sub">Lo que pagan los bancos por sus dólares</div>
       </div>
       <div class="kpi" id="k2">
         <div class="kpi-label">Tendencia 7 días</div>
@@ -836,8 +842,8 @@ function renderDashboard() {
     <div class="section-card">
       <div class="section-header">
         <div>
-          <div class="section-title">Histórico USD / CRC</div>
-          <div class="section-sub">Compra · Venta · Predicción · Promedio 30d</div>
+          <div class="section-title">Precio de Venta USD / CRC</div>
+          <div class="section-sub">Venta (lo que recibís) · EMA-7 · EMA-14 · Promedio 30d · Referencia histórica</div>
         </div>
         <div class="period-tabs">
           <button class="period-tab" data-days="7">7D</button>
@@ -854,8 +860,8 @@ function renderDashboard() {
     <div class="section-card">
       <div class="section-header">
         <div>
-          <div class="section-title">Predicción 15 días hábiles</div>
-          <div class="section-sub">Regresión lineal sobre los últimos 30 días · Solo referencial</div>
+          <div class="section-title">¿Cuándo vender? — Proyección 15 días hábiles</div>
+          <div class="section-sub">EMA + momentum + patrón semanal + señal de tasas BCCR · Solo referencial</div>
         </div>
       </div>
 
@@ -869,10 +875,10 @@ function renderDashboard() {
           <div class="q-label">📊 Precio estimado ese día</div>
           <div class="q-val">${predQ ? fmt(predQ.compra_estimada) : '—'}</div>
           <div class="q-sub">
-            ${predQ && a.precio_compra_hoy
-              ? (predQ.compra_estimada > a.precio_compra_hoy
-                  ? '↑ Subirá vs hoy — considerar comprar antes'
-                  : '↓ Bajará vs hoy — esperar puede convenir')
+            ${predQ && a.precio_venta_hoy
+              ? (predQ.compra_estimada > a.precio_venta_hoy
+                  ? '↑ Se espera precio mayor — podría esperar'
+                  : '↓ Se espera precio menor — mejor vender hoy')
               : '—'}
           </div>
         </div>
@@ -977,20 +983,8 @@ function renderChart(days) {
       labels: allLabels,
       datasets: [
         {
-          label: 'Compra',
+          label: 'Compra (ref)',
           data: compraData,
-          borderColor: '#2ecc8a',
-          backgroundColor: gradCompra,
-          borderWidth: 2,
-          fill: true,
-          tension: 0.35,
-          pointRadius: 0,
-          pointHoverRadius: 5,
-          pointHoverBackgroundColor: '#2ecc8a',
-        },
-        {
-          label: 'Venta',
-          data: ventaData,
           borderColor: '#f05c5c',
           backgroundColor: 'transparent',
           borderWidth: 1.5,
@@ -998,7 +992,19 @@ function renderChart(days) {
           tension: 0.35,
           pointRadius: 0,
           pointHoverRadius: 5,
-          pointHoverBackgroundColor: '#f05c5c',
+          pointHoverBackgroundColor: '#2ecc8a',
+        },
+        {
+          label: 'Venta (recibís) 💰',
+          data: ventaData,
+          borderColor: '#2ecc8a',
+          backgroundColor: gradCompra,
+          borderWidth: 2.5,
+          fill: true,
+          tension: 0.35,
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          pointHoverBackgroundColor: '#2ecc8a',
         },
         {
           label: 'Predicción',
