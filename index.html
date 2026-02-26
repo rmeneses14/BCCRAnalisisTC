@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>BCCR · Análisis de Tipo de Cambio</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=IBM+Plex+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+    :root{
+      --bg:       #0a0d12;
+      --bg1:      #0f1318;
+      --bg2:      #141920;
+      --bg3:      #1c2330;
+      --bg4:      #232d3d;
+      --line:     rgba(255,255,255,0.06);
+      --line2:    rgba(255,255,255,0.1);
+      --text:     #e8edf5;
+      --text2:    #8fa3bc;
+      --text3:    #506070;
+      --accent:   #4f9cf9;
+      --accent2:  #2d6fd4;
+      --green:    #2ecc8a;
+      --green-bg: rgba(46,204,138,0.08);
+      --green-bd: rgba(46,204,138,0.25);
+      --red:      #f05c5c;
+      --red-bg:   rgba(240,92,92,0.08);
+      --red-bd:   rgba(240,92,92,0.25);
+      --yellow:   #f0c040;
+      --yel-bg:   rgba(240,192,64,0.08);
+      --yel-bd:   rgba(240,192,64,0.25);
+      --mono:     'IBM Plex Mono', monospace;
+    }
+
+    html{scroll-behavior:smooth}
+
+    body{
+      font-family:'Outfit',sans-serif;
+      background:var(--bg);
+      color:var(--text);
+      min-height:100vh;
+      overflow-x:hidden;
+    }
+
+    /* Grid noise background */
+    body::before{
+      content:'';position:fixed;inset:0;
+      background-image:
+        linear-gradient(rgba(79,156,249,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(79,156,249,0.03) 1px, transparent 1px);
+      background-size:40px 40px;
+      pointer-events:none;z-index:0;
+    }
+
+    /* Glow top */
+    body::after{
+      content:'';position:fixed;top:-200px;left:50%;transform:translateX(-50%);
+      width:800px;height:400px;
+      background:radial-gradient(ellipse, rgba(79,156,249,0.07) 0%, transparent 70%);
+      pointer-events:none;z-index:0;
+    }
+
+    .wrapper{
+      position:relative;z-index:1;
+      max-width:1280px;margin:0 auto;padding:0 16px;
+    }
+
+    /* ── Header ── */
+    header{
+      padding:20px 0 18px;
+      border-bottom:1px solid var(--line);
+      margin-bottom:24px;
+    }
+
+    .header-inner{
+      display:flex;align-items:center;
+      justify-content:space-between;gap:12px;flex-wrap:wrap;
+    }
+
+    .brand{display:flex;align-items:center;gap:14px}
+
+    .brand-icon{
+      width:40px;height:40px;
+      background:linear-gradient(135deg,var(--accent2),var(--accent));
+      border-radius:10px;
+      display:flex;align-items:center;justify-content:center;
+      font-size:18px;
+      box-shadow:0 0 24px rgba(79,156,249,0.3);
+      flex-shrink:0;
+    }
+
+    .brand-text h1{
+      font-family:'DM Serif Display',serif;
+      font-size:clamp(16px,3vw,24px);
+      font-weight:400;
+      color:var(--text);
+      line-height:1.1;
+    }
+
+    .brand-text h1 em{color:var(--accent);font-style:normal}
+
+    .brand-sub{
+      font-size:11px;font-weight:400;
+      color:var(--text3);
+      letter-spacing:.12em;text-transform:uppercase;
+      margin-top:2px;
+    }
+
+    .header-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+
+    .ticker{
+      display:flex;align-items:center;gap:8px;
+      font-family:var(--mono);font-size:12px;
+      padding:7px 14px;
+      border:1px solid var(--line2);
+      border-radius:8px;background:var(--bg2);
+      color:var(--text2);
+    }
+
+    .ticker-dot{
+      width:6px;height:6px;border-radius:50%;
+      background:var(--green);
+      box-shadow:0 0 8px var(--green);
+      animation:blink 2s infinite;
+    }
+
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+
+    .btn-nav{
+      display:inline-flex;align-items:center;gap:6px;
+      font-size:12px;font-weight:500;color:var(--text2);
+      text-decoration:none;padding:7px 14px;
+      border:1px solid var(--line2);border-radius:8px;
+      background:var(--bg2);transition:all .2s;
+    }
+
+    .btn-nav:hover{color:var(--accent);border-color:rgba(79,156,249,.4)}
+
+    /* ── Signal hero ── */
+    .signal-hero{
+      border-radius:16px;padding:22px 24px;
+      margin-bottom:20px;border:1px solid;
+      position:relative;overflow:hidden;
+    }
+
+    .signal-hero::before{
+      content:'';position:absolute;
+      right:-40px;top:-40px;
+      width:180px;height:180px;
+      border-radius:50%;opacity:.06;
+    }
+
+    .signal-hero.comprar{background:var(--green-bg);border-color:var(--green-bd)}
+    .signal-hero.comprar::before{background:var(--green)}
+    .signal-hero.esperar{background:var(--red-bg);border-color:var(--red-bd)}
+    .signal-hero.esperar::before{background:var(--red)}
+    .signal-hero.neutral{background:var(--yel-bg);border-color:var(--yel-bd)}
+    .signal-hero.neutral::before{background:var(--yellow)}
+
+    .signal-top{
+      display:flex;align-items:flex-start;
+      justify-content:space-between;gap:12px;
+      flex-wrap:wrap;margin-bottom:10px;
+    }
+
+    .signal-eyebrow{
+      font-size:10px;font-weight:600;letter-spacing:.18em;
+      text-transform:uppercase;color:var(--text3);margin-bottom:6px;
+    }
+
+    .signal-badge{
+      font-family:'DM Serif Display',serif;
+      font-size:clamp(32px,6vw,52px);
+      font-weight:400;line-height:1;
+    }
+
+    .signal-hero.comprar .signal-badge{color:var(--green)}
+    .signal-hero.esperar .signal-badge{color:var(--red)}
+    .signal-hero.neutral .signal-badge{color:var(--yellow)}
+
+    .signal-icon{font-size:clamp(40px,8vw,64px);opacity:.7}
+
+    .signal-detail{
+      font-size:14px;color:var(--text2);
+      line-height:1.6;max-width:600px;
+    }
+
+    .signal-metrics{
+      display:flex;gap:24px;flex-wrap:wrap;
+      margin-top:16px;padding-top:16px;
+      border-top:1px solid var(--line);
+    }
+
+    .signal-metric{}
+    .signal-metric-label{
+      font-size:10px;font-weight:600;
+      color:var(--text3);text-transform:uppercase;
+      letter-spacing:.12em;margin-bottom:4px;
+    }
+
+    .signal-metric-val{
+      font-family:var(--mono);font-size:18px;
+      font-weight:500;color:var(--text);
+    }
+
+    .signal-metric-val.green{color:var(--green)}
+    .signal-metric-val.red{color:var(--red)}
+    .signal-metric-val.accent{color:var(--accent)}
+
+    /* ── KPI row ── */
+    .kpi-grid{
+      display:grid;
+      grid-template-columns:repeat(2,1fr);
+      gap:12px;margin-bottom:20px;
+    }
+
+    @media(min-width:640px){.kpi-grid{grid-template-columns:repeat(4,1fr)}}
+
+    .kpi{
+      background:var(--bg2);
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:16px 18px;
+      opacity:0;transform:translateY(10px);
+      transition:opacity .4s,transform .4s;
+    }
+
+    .kpi.visible{opacity:1;transform:translateY(0)}
+    .kpi:hover{border-color:var(--line2);background:var(--bg3)}
+
+    .kpi-label{
+      font-size:10px;font-weight:600;color:var(--text3);
+      text-transform:uppercase;letter-spacing:.12em;margin-bottom:8px;
+    }
+
+    .kpi-val{
+      font-family:var(--mono);
+      font-size:clamp(18px,3vw,22px);
+      font-weight:500;color:var(--text);line-height:1;
+    }
+
+    .kpi-val.up{color:var(--green)}
+    .kpi-val.down{color:var(--red)}
+    .kpi-val.neutral{color:var(--yellow)}
+
+    .kpi-sub{font-size:11px;color:var(--text3);margin-top:5px}
+
+    .kpi-chip{
+      display:inline-flex;align-items:center;gap:4px;
+      font-size:10px;font-weight:600;margin-top:6px;
+      padding:2px 8px;border-radius:4px;
+    }
+
+    .chip-up{background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd)}
+    .chip-down{background:var(--red-bg);color:var(--red);border:1px solid var(--red-bd)}
+    .chip-flat{background:var(--yel-bg);color:var(--yellow);border:1px solid var(--yel-bd)}
+
+    /* ── Best bank ── */
+    .best-bank{
+      display:flex;align-items:center;justify-content:space-between;
+      background:var(--bg2);border:1px solid var(--line);
+      border-radius:12px;padding:16px 20px;
+      margin-bottom:20px;flex-wrap:wrap;gap:12px;
+    }
+
+    .best-bank-left{display:flex;align-items:center;gap:12px}
+    .best-bank-icon{font-size:24px}
+    .best-bank-name{font-weight:600;font-size:15px;color:var(--text)}
+    .best-bank-label{font-size:11px;color:var(--text3);margin-top:2px}
+    .best-bank-price{font-family:var(--mono);font-size:26px;font-weight:500;color:var(--green)}
+    .best-bank-sub{font-size:11px;color:var(--text3);text-align:right;margin-top:2px}
+
+    /* ── Section card ── */
+    .section-card{
+      background:var(--bg1);
+      border:1px solid var(--line);
+      border-radius:16px;
+      padding:20px;margin-bottom:20px;
+    }
+
+    .section-header{
+      display:flex;align-items:flex-start;
+      justify-content:space-between;flex-wrap:wrap;
+      gap:10px;margin-bottom:20px;
+    }
+
+    .section-title{
+      font-family:'DM Serif Display',serif;
+      font-size:18px;font-weight:400;color:var(--text);
+    }
+
+    .section-sub{font-size:12px;color:var(--text3);margin-top:3px}
+
+    /* Period tabs */
+    .period-tabs{display:flex;gap:4px;flex-wrap:wrap}
+
+    .period-tab{
+      font-size:11px;font-weight:500;font-family:var(--mono);
+      padding:5px 12px;border:1px solid var(--line2);
+      border-radius:6px;cursor:pointer;
+      background:transparent;color:var(--text3);
+      transition:all .2s;white-space:nowrap;
+    }
+
+    .period-tab.active{
+      background:var(--accent2);color:white;
+      border-color:var(--accent2);
+    }
+
+    .period-tab:hover:not(.active){
+      color:var(--accent);border-color:rgba(79,156,249,.4);
+    }
+
+    /* Chart */
+    .chart-wrap{position:relative;height:280px}
+    @media(min-width:768px){.chart-wrap{height:320px}}
+
+    /* ── Quincenal helper ── */
+    .quincenal-grid{
+      display:grid;grid-template-columns:1fr 1fr;
+      gap:12px;margin-bottom:18px;
+    }
+
+    @media(max-width:480px){.quincenal-grid{grid-template-columns:1fr}}
+
+    .q-card{
+      border-radius:10px;padding:14px 16px;
+      border:1px solid var(--line);background:var(--bg2);
+    }
+
+    .q-label{
+      font-size:10px;font-weight:600;color:var(--text3);
+      text-transform:uppercase;letter-spacing:.12em;margin-bottom:6px;
+    }
+
+    .q-val{
+      font-family:var(--mono);font-size:20px;
+      font-weight:500;color:var(--text);
+    }
+
+    .q-sub{font-size:11px;color:var(--text3);margin-top:4px}
+
+    /* ── Prediction table ── */
+    .pred-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+
+    .pred-table{
+      width:100%;border-collapse:collapse;
+      font-size:13px;min-width:400px;
+    }
+
+    .pred-table th{
+      padding:10px 14px;text-align:left;
+      font-size:10px;font-weight:600;
+      text-transform:uppercase;letter-spacing:.12em;
+      color:var(--text3);
+      border-bottom:1px solid var(--line);
+      white-space:nowrap;
+      font-family:var(--mono);
+    }
+
+    .pred-table td{
+      padding:10px 14px;
+      border-bottom:1px solid var(--line);
+      vertical-align:middle;
+    }
+
+    .pred-table tr:last-child td{border-bottom:none}
+    .pred-table tbody tr:hover td{background:var(--bg3)}
+
+    .pred-date{font-size:12px;color:var(--text3);font-family:var(--mono)}
+    .pred-val{font-family:var(--mono);font-size:16px;font-weight:500}
+    .pred-up{color:var(--red)}
+    .pred-down{color:var(--green)}
+    .pred-flat{color:var(--text3)}
+
+    .pred-diff{
+      font-family:var(--mono);font-size:11px;
+      padding:2px 7px;border-radius:4px;white-space:nowrap;
+    }
+
+    .diff-up{background:var(--red-bg);color:var(--red)}
+    .diff-down{background:var(--green-bg);color:var(--green)}
+    .diff-flat{background:rgba(255,255,255,.04);color:var(--text3)}
+
+    /* bar */
+    .mini-bar{height:4px;border-radius:2px;background:var(--bg3);min-width:60px}
+    .mini-bar-fill{height:100%;border-radius:2px;background:var(--accent2);transition:width .6s}
+
+    /* ── Loading / Error ── */
+    .loading-state{
+      display:flex;flex-direction:column;
+      align-items:center;justify-content:center;
+      min-height:320px;gap:16px;
+    }
+
+    .spinner{
+      width:36px;height:36px;
+      border:2px solid var(--line2);
+      border-top-color:var(--accent);
+      border-radius:50%;
+      animation:spin .7s linear infinite;
+    }
+
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    .loading-label{
+      font-family:var(--mono);font-size:12px;
+      color:var(--text3);letter-spacing:.1em;
+    }
+
+    .error-box{
+      background:var(--red-bg);border:1px solid var(--red-bd);
+      border-radius:12px;padding:16px 20px;
+      font-size:13px;color:var(--red);margin-bottom:20px;
+      line-height:1.6;
+    }
+
+    .error-box a{color:var(--accent)}
+
+    /* ── Mobile sort ── */
+    .mobile-sort-bar{
+      display:flex;align-items:center;gap:8px;
+      padding:10px 0;overflow-x:auto;scrollbar-width:none;
+      margin-bottom:12px;
+    }
+
+    .mobile-sort-bar::-webkit-scrollbar{display:none}
+
+    @media(min-width:768px){.mobile-sort-bar{display:none}}
+
+    .sort-pill{
+      display:inline-flex;align-items:center;gap:4px;
+      font-size:11px;font-weight:500;font-family:var(--mono);
+      padding:5px 12px;border-radius:6px;flex-shrink:0;
+      border:1px solid var(--line2);background:var(--bg2);
+      color:var(--text3);cursor:pointer;transition:all .2s;
+    }
+
+    .sort-pill.active{background:var(--accent2);color:white;border-color:var(--accent2)}
+
+    /* ── Footer ── */
+    footer{
+      padding:20px 0 32px;margin-top:8px;
+      border-top:1px solid var(--line);
+    }
+
+    .footer-inner{
+      display:flex;align-items:center;
+      justify-content:space-between;flex-wrap:wrap;gap:12px;
+    }
+
+    .footer-text{font-size:12px;color:var(--text3)}
+    .footer-text a{color:var(--accent);text-decoration:none}
+
+    .btn-refresh{
+      display:flex;align-items:center;gap:8px;
+      background:var(--accent2);color:white;
+      font-family:'Outfit',sans-serif;
+      font-size:13px;font-weight:500;
+      padding:9px 20px;border:none;border-radius:8px;
+      cursor:pointer;
+      box-shadow:0 0 20px rgba(79,156,249,.25);
+      transition:opacity .2s,transform .2s;
+    }
+
+    .btn-refresh:hover{opacity:.88;transform:translateY(-1px)}
+    .btn-refresh:active{transform:scale(.97)}
+    .btn-refresh.spinning svg{animation:spin .7s linear infinite}
+
+    /* Mobile tweaks */
+    @media(max-width:480px){
+      .signal-metrics{gap:16px}
+      .best-bank{flex-direction:column;align-items:flex-start}
+      .best-bank-price{font-size:22px}
+    }
+  </style>
+</head>
+<body>
+
+<div class="wrapper">
+
+  <!-- Header -->
+  <header>
+    <div class="header-inner">
+      <div class="brand">
+        <div class="brand-icon">📈</div>
+        <div class="brand-text">
+          <h1>BCCR <em>Analytics</em></h1>
+          <div class="brand-sub">Tipo de cambio · Análisis & Predicción</div>
+        </div>
+      </div>
+      <div class="header-right">
+        <a href="https://rmeneses14.github.io/tipoCambioFront" class="btn-nav">← Ventanilla</a>
+        <div class="ticker">
+          <div class="ticker-dot"></div>
+          <span id="statusText">Conectando...</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <div id="mainContent">
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <div class="loading-label">CONSULTANDO BCCR · WS HISTÓRICO</div>
+    </div>
+  </div>
+
+  <footer>
+    <div class="footer-inner">
+      <div class="footer-text">
+        Fuente: <a href="https://gee.bccr.fi.cr" target="_blank">BCCR</a> ·
+        API: <a href="https://bccr-hist.onrender.com/docs" target="_blank">bccr-hist.onrender.com</a> ·
+        Predicción referencial — regresión lineal 30d
+      </div>
+      <button class="btn-refresh" id="btnRefresh">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M23 4v6h-6M1 20v-6h6"/>
+          <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+        </svg>
+        Actualizar
+      </button>
+    </div>
+  </footer>
+</div>
+
+<script>
+const API = 'https://bccr-hist.onrender.com';
+const fmt  = n => n != null ? '₡' + Number(n).toLocaleString('es-CR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
+const fmtN = n => n != null ? Number(n).toLocaleString('es-CR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
+
+let chartInstance = null;
+let allHistorico  = [];
+let analisis      = null;
+let sortCol = null, sortDir = 'asc';
+
+// ── Load ──────────────────────────────────────────────────────────────────
+async function loadAll() {
+  setStatus('loading');
+  document.getElementById('mainContent').innerHTML = `
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <div class="loading-label">CONSULTANDO BCCR · WS HISTÓRICO</div>
+    </div>`;
+
+  try {
+    const [resA, resH] = await Promise.all([
+      fetch(`${API}/analisis`),
+      fetch(`${API}/historico?dias=180`)
+    ]);
+
+    if (!resA.ok) throw new Error(`analisis: ${resA.status}`);
+    analisis = await resA.json();
+
+    if (resH.ok) {
+      const hj = await resH.json();
+      allHistorico = hj.datos || [];
+    }
+
+    renderDashboard();
+    setStatus('ok');
+  } catch(e) {
+    document.getElementById('mainContent').innerHTML = `
+      <div class="error-box">
+        ⚠️ <strong>No se pudo conectar con la API.</strong><br>
+        El servicio en Render puede estar iniciando (cold start ~30s). Intenta de nuevo.<br>
+        <small style="opacity:.6">Error: ${e.message}</small>
+      </div>`;
+    setStatus('error');
+  }
+}
+
+function setStatus(s) {
+  const txt = document.getElementById('statusText');
+  const dot = document.querySelector('.ticker-dot');
+  if (s === 'ok') {
+    dot.style.background = '#2ecc8a';
+    dot.style.boxShadow  = '0 0 8px #2ecc8a';
+    txt.textContent = 'EN VIVO · ' + new Date().toLocaleTimeString('es-CR');
+  } else if (s === 'error') {
+    dot.style.background = '#f05c5c';
+    dot.style.boxShadow  = 'none';
+    txt.textContent = 'ERROR';
+  } else {
+    dot.style.background = '#f0c040';
+    dot.style.boxShadow  = '0 0 8px #f0c040';
+    txt.textContent = 'CARGANDO...';
+  }
+}
+
+// ── Render ────────────────────────────────────────────────────────────────
+function renderDashboard() {
+  const a = analisis;
+  const sc = a.señal === 'COMPRAR' ? 'comprar' : a.señal === 'ESPERAR' ? 'esperar' : 'neutral';
+  const si = a.señal === 'COMPRAR' ? '🟢' : a.señal === 'ESPERAR' ? '🔴' : '🟡';
+
+  const tendIcon  = a.tendencia_7d === 'alza' ? '↑' : a.tendencia_7d === 'baja' ? '↓' : '→';
+  const tendClass = a.tendencia_7d === 'alza' ? 'chip-up' : a.tendencia_7d === 'baja' ? 'chip-down' : 'chip-flat';
+  const tendLabel = a.tendencia_7d === 'alza' ? 'ALZA' : a.tendencia_7d === 'baja' ? 'BAJA' : 'ESTABLE';
+  const tendValClass = a.tendencia_7d === 'alza' ? 'up' : a.tendencia_7d === 'baja' ? 'down' : 'neutral';
+
+  // Quincena
+  const hoy = new Date();
+  const proxQ = hoy.getDate() <= 15
+    ? new Date(hoy.getFullYear(), hoy.getMonth(), 15)
+    : new Date(hoy.getFullYear(), hoy.getMonth()+1, 1);
+  const diasQ = Math.ceil((proxQ - hoy) / 86400000);
+  const pred15 = a.prediccion_15d || [];
+  const predQ  = pred15.find(p => Math.abs(new Date(p.fecha+'T12:00:00') - proxQ) < 3*86400000)
+               || pred15[pred15.length-1];
+
+  // Diff hoy vs promedio 30d
+  const diffVsProm = a.precio_compra_hoy && a.promedio_compra_30d
+    ? a.precio_compra_hoy - a.promedio_compra_30d : 0;
+  const diffSign = diffVsProm >= 0 ? '+' : '';
+  const diffClass = diffVsProm < 0 ? 'green' : diffVsProm > 0 ? 'red' : 'accent';
+
+  // Prediction rows
+  const predRows = pred15.map((p,i) => {
+    const prev = i === 0 ? a.precio_compra_hoy : pred15[i-1].compra_estimada;
+    const diff = p.compra_estimada - (prev || p.compra_estimada);
+    const cls  = diff > 0.5 ? 'pred-up' : diff < -0.5 ? 'pred-down' : 'pred-flat';
+    const diffCls = diff > 0.5 ? 'diff-up' : diff < -0.5 ? 'diff-down' : 'diff-flat';
+    const ico  = diff > 0.5 ? '↑' : diff < -0.5 ? '↓' : '→';
+    const d = new Date(p.fecha+'T12:00:00');
+    const label = d.toLocaleDateString('es-CR',{weekday:'short',day:'numeric',month:'short'});
+    const rMin = a.minimo_compra_90d, rMax = a.maximo_compra_90d;
+    const pct  = rMax > rMin ? Math.max(0,Math.min(100,((p.compra_estimada-rMin)/(rMax-rMin))*100)) : 50;
+
+    // Highlight quincena
+    const isQ = predQ && p.fecha === predQ.fecha;
+    const rowStyle = isQ ? 'background:rgba(79,156,249,0.06);' : '';
+
+    return `<tr style="${rowStyle}">
+      <td><span class="pred-date">${label}${isQ ? ' <span style="color:var(--accent);font-size:10px">◀ QUINCENA</span>' : ''}</span></td>
+      <td><span class="pred-val ${cls}">${fmt(p.compra_estimada)}</span></td>
+      <td><span class="pred-diff ${diffCls}">${ico} ${diff>=0?'+':''}${fmtN(diff)}</span></td>
+      <td style="min-width:80px"><div class="mini-bar"><div class="mini-bar-fill" style="width:${pct}%"></div></div></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('mainContent').innerHTML = `
+
+    <!-- Signal hero -->
+    <div class="signal-hero ${sc}">
+      <div class="signal-top">
+        <div>
+          <div class="signal-eyebrow">Recomendación quincenal · USD/CRC</div>
+          <div class="signal-badge">${a.señal}</div>
+        </div>
+        <div class="signal-icon">${si}</div>
+      </div>
+      <div class="signal-detail">${a.señal_detalle}</div>
+      <div class="signal-metrics">
+        <div class="signal-metric">
+          <div class="signal-metric-label">Mín. 90 días</div>
+          <div class="signal-metric-val green">${fmt(a.minimo_compra_90d)}</div>
+        </div>
+        <div class="signal-metric">
+          <div class="signal-metric-label">Prom. 30 días</div>
+          <div class="signal-metric-val accent">${fmt(a.promedio_compra_30d)}</div>
+        </div>
+        <div class="signal-metric">
+          <div class="signal-metric-label">Prom. 90 días</div>
+          <div class="signal-metric-val accent">${fmt(a.promedio_compra_90d)}</div>
+        </div>
+        <div class="signal-metric">
+          <div class="signal-metric-label">Máx. 90 días</div>
+          <div class="signal-metric-val red">${fmt(a.maximo_compra_90d)}</div>
+        </div>
+        <div class="signal-metric">
+          <div class="signal-metric-label">Actualizado</div>
+          <div class="signal-metric-val" style="font-size:12px;color:var(--text3)">${a.fecha_consulta}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="kpi-grid">
+      <div class="kpi" id="k0">
+        <div class="kpi-label">Compra hoy</div>
+        <div class="kpi-val">${fmt(a.precio_compra_hoy)}</div>
+        <div class="kpi-sub">Promedio sistema BCCR</div>
+        <span class="kpi-chip ${diffClass === 'green' ? 'chip-down' : diffClass === 'red' ? 'chip-up' : 'chip-flat'}">
+          ${diffSign}${fmtN(diffVsProm)} vs prom. 30d
+        </span>
+      </div>
+      <div class="kpi" id="k1">
+        <div class="kpi-label">Venta hoy</div>
+        <div class="kpi-val">${fmt(a.precio_venta_hoy)}</div>
+        <div class="kpi-sub">Promedio sistema BCCR</div>
+      </div>
+      <div class="kpi" id="k2">
+        <div class="kpi-label">Tendencia 7 días</div>
+        <div class="kpi-val ${tendValClass}">${tendLabel}</div>
+        <div class="kpi-sub">Últimos 7 días hábiles</div>
+        <span class="kpi-chip ${tendClass}">${tendIcon} ${tendLabel}</span>
+      </div>
+      <div class="kpi" id="k3">
+        <div class="kpi-label">Próxima quincena</div>
+        <div class="kpi-val accent">${diasQ}d</div>
+        <div class="kpi-sub">${proxQ.toLocaleDateString('es-CR',{day:'numeric',month:'short',year:'numeric'})}</div>
+        ${predQ ? `<span class="kpi-chip chip-flat">${fmt(predQ.compra_estimada)} estimado</span>` : ''}
+      </div>
+    </div>
+
+    <!-- Best bank -->
+    <div class="best-bank">
+      <div class="best-bank-left">
+        <div class="best-bank-icon">🏆</div>
+        <div>
+          <div class="best-bank-name">${a.mejor_entidad_compra}</div>
+          <div class="best-bank-label">Mejor precio de compra disponible hoy en ventanilla</div>
+        </div>
+      </div>
+      <div>
+        <div class="best-bank-price">${fmt(a.mejor_precio_compra)}</div>
+        <div class="best-bank-sub">por dólar</div>
+      </div>
+    </div>
+
+    <!-- Chart -->
+    <div class="section-card">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Histórico USD / CRC</div>
+          <div class="section-sub">Compra · Venta · Predicción · Promedio 30d</div>
+        </div>
+        <div class="period-tabs">
+          <button class="period-tab" data-days="30">30D</button>
+          <button class="period-tab active" data-days="90">90D</button>
+          <button class="period-tab" data-days="180">180D</button>
+        </div>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="chartMain"></canvas>
+      </div>
+    </div>
+
+    <!-- Prediction -->
+    <div class="section-card">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Predicción 15 días hábiles</div>
+          <div class="section-sub">Regresión lineal sobre los últimos 30 días · Solo referencial</div>
+        </div>
+      </div>
+
+      <div class="quincenal-grid">
+        <div class="q-card">
+          <div class="q-label">⏱ Días para quincena</div>
+          <div class="q-val" style="color:var(--accent)">${diasQ}</div>
+          <div class="q-sub">${proxQ.toLocaleDateString('es-CR',{weekday:'long',day:'numeric',month:'long'})}</div>
+        </div>
+        <div class="q-card">
+          <div class="q-label">📊 Precio estimado ese día</div>
+          <div class="q-val">${predQ ? fmt(predQ.compra_estimada) : '—'}</div>
+          <div class="q-sub">
+            ${predQ && a.precio_compra_hoy
+              ? (predQ.compra_estimada > a.precio_compra_hoy
+                  ? '↑ Subirá vs hoy — considerar comprar antes'
+                  : '↓ Bajará vs hoy — esperar puede convenir')
+              : '—'}
+          </div>
+        </div>
+      </div>
+
+      <!-- Mobile sort -->
+      <div class="mobile-sort-bar">
+        <span style="font-size:10px;color:var(--text3);white-space:nowrap;font-family:var(--mono)">ORDENAR:</span>
+        <span class="sort-pill" data-col="fecha">FECHA</span>
+        <span class="sort-pill" data-col="compra_estimada">COMPRA</span>
+      </div>
+
+      <div class="pred-scroll">
+        <table class="pred-table">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Compra estimada</th>
+              <th>Variación</th>
+              <th>Nivel vs 90d</th>
+            </tr>
+          </thead>
+          <tbody>${predRows}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  // Animate KPIs
+  [0,1,2,3].forEach(i => setTimeout(() => document.getElementById('k'+i)?.classList.add('visible'), i*80));
+
+  // Chart
+  renderChart(90);
+
+  // Period tabs
+  document.querySelectorAll('.period-tab').forEach(tab =>
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.period-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      renderChart(parseInt(tab.dataset.days));
+    })
+  );
+}
+
+// ── Chart ─────────────────────────────────────────────────────────────────
+function renderChart(days) {
+  if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+
+  const hist = allHistorico.slice(-days);
+  const pred = (analisis?.prediccion_15d || []);
+
+  const hLabels = hist.map(d => {
+    const dt = new Date(d.fecha+'T12:00:00');
+    return dt.toLocaleDateString('es-CR',{day:'numeric',month:'short'});
+  });
+  const pLabels = pred.map(p => {
+    const dt = new Date(p.fecha+'T12:00:00');
+    return dt.toLocaleDateString('es-CR',{day:'numeric',month:'short'});
+  });
+
+  const allLabels  = [...hLabels, ...pLabels];
+  const compraData = [...hist.map(d => d.compra), ...new Array(pLabels.length).fill(null)];
+  const ventaData  = [...hist.map(d => d.venta),  ...new Array(pLabels.length).fill(null)];
+  const predData   = [
+    ...new Array(hLabels.length - 1).fill(null),
+    hist[hist.length-1]?.compra ?? null,
+    ...pred.map(p => p.compra_estimada)
+  ];
+  const prom30 = analisis?.promedio_compra_30d;
+  const promLine = allLabels.map(() => prom30);
+
+  const ctx = document.getElementById('chartMain').getContext('2d');
+
+  const gradCompra = ctx.createLinearGradient(0,0,0,300);
+  gradCompra.addColorStop(0, 'rgba(46,204,138,0.15)');
+  gradCompra.addColorStop(1, 'rgba(46,204,138,0.01)');
+
+  chartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: allLabels,
+      datasets: [
+        {
+          label: 'Compra',
+          data: compraData,
+          borderColor: '#2ecc8a',
+          backgroundColor: gradCompra,
+          borderWidth: 2,
+          fill: true,
+          tension: 0.35,
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          pointHoverBackgroundColor: '#2ecc8a',
+        },
+        {
+          label: 'Venta',
+          data: ventaData,
+          borderColor: '#f05c5c',
+          backgroundColor: 'transparent',
+          borderWidth: 1.5,
+          fill: false,
+          tension: 0.35,
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          pointHoverBackgroundColor: '#f05c5c',
+        },
+        {
+          label: 'Predicción',
+          data: predData,
+          borderColor: '#4f9cf9',
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          borderDash: [5,4],
+          fill: false,
+          tension: 0.3,
+          pointRadius: 3,
+          pointBackgroundColor: '#4f9cf9',
+          pointHoverRadius: 6,
+        },
+        {
+          label: `Prom. 30d (${fmt(prom30)})`,
+          data: promLine,
+          borderColor: 'rgba(240,192,64,0.4)',
+          backgroundColor: 'transparent',
+          borderWidth: 1,
+          borderDash: [3,4],
+          fill: false,
+          tension: 0,
+          pointRadius: 0,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode:'index', intersect:false },
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            font: { family:'IBM Plex Mono', size:11 },
+            color: '#506070',
+            boxWidth: 14,
+            padding: 16,
+          },
+        },
+        tooltip: {
+          backgroundColor: '#141920',
+          titleColor: '#e8edf5',
+          bodyColor: '#8fa3bc',
+          borderColor: 'rgba(255,255,255,0.1)',
+          borderWidth: 1,
+          padding: 12,
+          titleFont: { family:'IBM Plex Mono', size:11 },
+          bodyFont:  { family:'IBM Plex Mono', size:12 },
+          callbacks: {
+            label: ctx => {
+              if (ctx.parsed.y == null) return null;
+              return ` ${ctx.dataset.label}: ₡${ctx.parsed.y.toLocaleString('es-CR',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color:'rgba(255,255,255,0.04)' },
+          ticks: {
+            font: { family:'IBM Plex Mono', size:10 },
+            color: '#506070',
+            maxTicksLimit: 10,
+            maxRotation: 0,
+          },
+        },
+        y: {
+          grid: { color:'rgba(255,255,255,0.04)' },
+          ticks: {
+            font: { family:'IBM Plex Mono', size:10 },
+            color: '#506070',
+            callback: v => '₡' + v.toLocaleString('es-CR'),
+          },
+        },
+      },
+    },
+  });
+}
+
+// ── Events ────────────────────────────────────────────────────────────────
+document.getElementById('btnRefresh').addEventListener('click', () => {
+  const btn = document.getElementById('btnRefresh');
+  btn.classList.add('spinning');
+  loadAll().finally(() => btn.classList.remove('spinning'));
+});
+
+loadAll();
+</script>
+</body>
+</html>
