@@ -1,1137 +1,563 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>BCCR · Análisis de Tipo de Cambio</title>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=IBM+Plex+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet"/>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-  <style>
-    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-
-    :root{
-      --bg:       #0a0d12;
-      --bg1:      #0f1318;
-      --bg2:      #141920;
-      --bg3:      #1c2330;
-      --bg4:      #232d3d;
-      --line:     rgba(255,255,255,0.06);
-      --line2:    rgba(255,255,255,0.1);
-      --text:     #e8edf5;
-      --text2:    #8fa3bc;
-      --text3:    #506070;
-      --accent:   #4f9cf9;
-      --accent2:  #2d6fd4;
-      --green:    #2ecc8a;
-      --green-bg: rgba(46,204,138,0.08);
-      --green-bd: rgba(46,204,138,0.25);
-      --red:      #f05c5c;
-      --red-bg:   rgba(240,92,92,0.08);
-      --red-bd:   rgba(240,92,92,0.25);
-      --yellow:   #f0c040;
-      --yel-bg:   rgba(240,192,64,0.08);
-      --yel-bd:   rgba(240,192,64,0.25);
-      --mono:     'IBM Plex Mono', monospace;
-    }
-
-    html{scroll-behavior:smooth}
-
-    body{
-      font-family:'Outfit',sans-serif;
-      background:var(--bg);
-      color:var(--text);
-      min-height:100vh;
-      overflow-x:hidden;
-    }
-
-    /* Grid noise background */
-    body::before{
-      content:'';position:fixed;inset:0;
-      background-image:
-        linear-gradient(rgba(79,156,249,0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(79,156,249,0.03) 1px, transparent 1px);
-      background-size:40px 40px;
-      pointer-events:none;z-index:0;
-    }
-
-    /* Glow top */
-    body::after{
-      content:'';position:fixed;top:-200px;left:50%;transform:translateX(-50%);
-      width:800px;height:400px;
-      background:radial-gradient(ellipse, rgba(79,156,249,0.07) 0%, transparent 70%);
-      pointer-events:none;z-index:0;
-    }
-
-    .wrapper{
-      position:relative;z-index:1;
-      max-width:1280px;margin:0 auto;padding:0 16px;
-    }
-
-    /* ── Header ── */
-    header{
-      padding:20px 0 18px;
-      border-bottom:1px solid var(--line);
-      margin-bottom:24px;
-    }
-
-    .header-inner{
-      display:flex;align-items:center;
-      justify-content:space-between;gap:12px;flex-wrap:wrap;
-    }
-
-    .brand{display:flex;align-items:center;gap:14px}
-
-    .brand-icon{
-      width:40px;height:40px;
-      background:linear-gradient(135deg,var(--accent2),var(--accent));
-      border-radius:10px;
-      display:flex;align-items:center;justify-content:center;
-      font-size:18px;
-      box-shadow:0 0 24px rgba(79,156,249,0.3);
-      flex-shrink:0;
-    }
-
-    .brand-text h1{
-      font-family:'DM Serif Display',serif;
-      font-size:clamp(16px,3vw,24px);
-      font-weight:400;
-      color:var(--text);
-      line-height:1.1;
-    }
-
-    .brand-text h1 em{color:var(--accent);font-style:normal}
-
-    .brand-sub{
-      font-size:11px;font-weight:400;
-      color:var(--text3);
-      letter-spacing:.12em;text-transform:uppercase;
-      margin-top:2px;
-    }
-
-    .header-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-
-    .ticker{
-      display:flex;align-items:center;gap:8px;
-      font-family:var(--mono);font-size:12px;
-      padding:7px 14px;
-      border:1px solid var(--line2);
-      border-radius:8px;background:var(--bg2);
-      color:var(--text2);
-    }
-
-    .ticker-dot{
-      width:6px;height:6px;border-radius:50%;
-      background:var(--green);
-      box-shadow:0 0 8px var(--green);
-      animation:blink 2s infinite;
-    }
-
-    @keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
-
-    .btn-nav{
-      display:inline-flex;align-items:center;gap:6px;
-      font-size:12px;font-weight:500;color:var(--text2);
-      text-decoration:none;padding:7px 14px;
-      border:1px solid var(--line2);border-radius:8px;
-      background:var(--bg2);transition:all .2s;
-    }
-
-    .btn-nav:hover{color:var(--accent);border-color:rgba(79,156,249,.4)}
-
-    /* ── Signal hero ── */
-    .signal-hero{
-      border-radius:16px;padding:22px 24px;
-      margin-bottom:20px;border:1px solid;
-      position:relative;overflow:hidden;
-    }
-
-    .signal-hero::before{
-      content:'';position:absolute;
-      right:-40px;top:-40px;
-      width:180px;height:180px;
-      border-radius:50%;opacity:.06;
-    }
-
-    .signal-hero.comprar{background:var(--green-bg);border-color:var(--green-bd)}
-    .signal-hero.comprar::before{background:var(--green)}
-    .signal-hero.esperar{background:var(--red-bg);border-color:var(--red-bd)}
-    .signal-hero.esperar::before{background:var(--red)}
-    .signal-hero.neutral{background:var(--yel-bg);border-color:var(--yel-bd)}
-    .signal-hero.neutral::before{background:var(--yellow)}
-
-    .signal-top{
-      display:flex;align-items:flex-start;
-      justify-content:space-between;gap:12px;
-      flex-wrap:wrap;margin-bottom:10px;
-    }
-
-    .signal-eyebrow{
-      font-size:10px;font-weight:600;letter-spacing:.18em;
-      text-transform:uppercase;color:var(--text3);margin-bottom:6px;
-    }
-
-    .signal-badge{
-      font-family:'DM Serif Display',serif;
-      font-size:clamp(32px,6vw,52px);
-      font-weight:400;line-height:1;
-    }
-
-    .signal-hero.comprar .signal-badge{color:var(--green)}
-    .signal-hero.esperar .signal-badge{color:var(--red)}
-    .signal-hero.neutral .signal-badge{color:var(--yellow)}
-
-    .signal-icon{font-size:clamp(40px,8vw,64px);opacity:.7}
-
-    .signal-detail{
-      font-size:14px;color:var(--text2);
-      line-height:1.6;max-width:600px;
-    }
-
-    .signal-metrics{
-      display:flex;gap:24px;flex-wrap:wrap;
-      margin-top:16px;padding-top:16px;
-      border-top:1px solid var(--line);
-    }
-
-    .signal-metric{}
-    .signal-metric-label{
-      font-size:10px;font-weight:600;
-      color:var(--text3);text-transform:uppercase;
-      letter-spacing:.12em;margin-bottom:4px;
-    }
-
-    .signal-metric-val{
-      font-family:var(--mono);font-size:18px;
-      font-weight:500;color:var(--text);
-    }
-
-    .signal-metric-val.green{color:var(--green)}
-    .signal-metric-val.red{color:var(--red)}
-    .signal-metric-val.accent{color:var(--accent)}
-
-    /* ── KPI row ── */
-    .kpi-grid{
-      display:grid;
-      grid-template-columns:repeat(2,1fr);
-      gap:12px;margin-bottom:20px;
-    }
-
-    @media(min-width:640px){.kpi-grid{grid-template-columns:repeat(4,1fr)}}
-
-    .kpi{
-      background:var(--bg2);
-      border:1px solid var(--line);
-      border-radius:12px;
-      padding:16px 18px;
-      opacity:0;transform:translateY(10px);
-      transition:opacity .4s,transform .4s;
-    }
-
-    .kpi.visible{opacity:1;transform:translateY(0)}
-    .kpi:hover{border-color:var(--line2);background:var(--bg3)}
-
-    .kpi-label{
-      font-size:10px;font-weight:600;color:var(--text3);
-      text-transform:uppercase;letter-spacing:.12em;margin-bottom:8px;
-    }
-
-    .kpi-val{
-      font-family:var(--mono);
-      font-size:clamp(18px,3vw,22px);
-      font-weight:500;color:var(--text);line-height:1;
-    }
-
-    .kpi-val.up{color:var(--green)}
-    .kpi-val.down{color:var(--red)}
-    .kpi-val.neutral{color:var(--yellow)}
-
-    .kpi-sub{font-size:11px;color:var(--text3);margin-top:5px}
-
-    .kpi-chip{
-      display:inline-flex;align-items:center;gap:4px;
-      font-size:10px;font-weight:600;margin-top:6px;
-      padding:2px 8px;border-radius:4px;
-    }
-
-    .chip-up{background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd)}
-    .chip-down{background:var(--red-bg);color:var(--red);border:1px solid var(--red-bd)}
-    .chip-flat{background:var(--yel-bg);color:var(--yellow);border:1px solid var(--yel-bd)}
-
-    /* ── Best bank ── */
-    .best-bank{
-      display:flex;align-items:center;justify-content:space-between;
-      background:var(--bg2);border:1px solid var(--line);
-      border-radius:12px;padding:16px 20px;
-      margin-bottom:20px;flex-wrap:wrap;gap:12px;
-    }
-
-    .best-bank-left{display:flex;align-items:center;gap:12px}
-    .best-bank-icon{font-size:24px}
-    .best-bank-name{font-weight:600;font-size:15px;color:var(--text)}
-    .best-bank-label{font-size:11px;color:var(--text3);margin-top:2px}
-    .best-bank-price{font-family:var(--mono);font-size:26px;font-weight:500;color:var(--green)}
-    .best-bank-sub{font-size:11px;color:var(--text3);text-align:right;margin-top:2px}
-
-    /* ── Section card ── */
-    .section-card{
-      background:var(--bg1);
-      border:1px solid var(--line);
-      border-radius:16px;
-      padding:20px;margin-bottom:20px;
-    }
-
-    .section-header{
-      display:flex;align-items:flex-start;
-      justify-content:space-between;flex-wrap:wrap;
-      gap:10px;margin-bottom:20px;
-    }
-
-    .section-title{
-      font-family:'DM Serif Display',serif;
-      font-size:18px;font-weight:400;color:var(--text);
-    }
-
-    .section-sub{font-size:12px;color:var(--text3);margin-top:3px}
-
-    /* Period tabs */
-    .period-tabs{display:flex;gap:4px;flex-wrap:wrap}
-
-    .period-tab{
-      font-size:11px;font-weight:500;font-family:var(--mono);
-      padding:5px 12px;border:1px solid var(--line2);
-      border-radius:6px;cursor:pointer;
-      background:transparent;color:var(--text3);
-      transition:all .2s;white-space:nowrap;
-    }
-
-    .period-tab.active{
-      background:var(--accent2);color:white;
-      border-color:var(--accent2);
-    }
-
-    .period-tab:hover:not(.active){
-      color:var(--accent);border-color:rgba(79,156,249,.4);
-    }
-
-    /* Chart */
-    .chart-wrap{position:relative;height:280px}
-    @media(min-width:768px){.chart-wrap{height:320px}}
-
-    /* ── Quincenal helper ── */
-    .quincenal-grid{
-      display:grid;grid-template-columns:1fr 1fr;
-      gap:12px;margin-bottom:18px;
-    }
-
-    @media(max-width:480px){.quincenal-grid{grid-template-columns:1fr}}
-
-    .q-card{
-      border-radius:10px;padding:14px 16px;
-      border:1px solid var(--line);background:var(--bg2);
-    }
-
-    .q-label{
-      font-size:10px;font-weight:600;color:var(--text3);
-      text-transform:uppercase;letter-spacing:.12em;margin-bottom:6px;
-    }
-
-    .q-val{
-      font-family:var(--mono);font-size:20px;
-      font-weight:500;color:var(--text);
-    }
-
-    .q-sub{font-size:11px;color:var(--text3);margin-top:4px}
-
-    /* ── Prediction table ── */
-    .pred-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
-
-    .pred-table{
-      width:100%;border-collapse:collapse;
-      font-size:13px;min-width:400px;
-    }
-
-    .pred-table th{
-      padding:10px 14px;text-align:left;
-      font-size:10px;font-weight:600;
-      text-transform:uppercase;letter-spacing:.12em;
-      color:var(--text3);
-      border-bottom:1px solid var(--line);
-      white-space:nowrap;
-      font-family:var(--mono);
-    }
-
-    .pred-table td{
-      padding:10px 14px;
-      border-bottom:1px solid var(--line);
-      vertical-align:middle;
-    }
-
-    .pred-table tr:last-child td{border-bottom:none}
-    .pred-table tbody tr:hover td{background:var(--bg3)}
-
-    .pred-date{font-size:12px;color:var(--text3);font-family:var(--mono)}
-    .pred-val{font-family:var(--mono);font-size:16px;font-weight:500}
-    .pred-up{color:var(--red)}
-    .pred-down{color:var(--green)}
-    .pred-flat{color:var(--text3)}
-
-    .pred-diff{
-      font-family:var(--mono);font-size:11px;
-      padding:2px 7px;border-radius:4px;white-space:nowrap;
-    }
-
-    .diff-up{background:var(--red-bg);color:var(--red)}
-    .diff-down{background:var(--green-bg);color:var(--green)}
-    .diff-flat{background:rgba(255,255,255,.04);color:var(--text3)}
-
-    /* bar */
-    .mini-bar{height:4px;border-radius:2px;background:var(--bg3);min-width:60px}
-    .mini-bar-fill{height:100%;border-radius:2px;background:var(--accent2);transition:width .6s}
-
-    /* ── Loading / Error ── */
-    .loading-state{
-      display:flex;flex-direction:column;
-      align-items:center;justify-content:center;
-      min-height:320px;gap:16px;
-    }
-
-    .spinner{
-      width:36px;height:36px;
-      border:2px solid var(--line2);
-      border-top-color:var(--accent);
-      border-radius:50%;
-      animation:spin .7s linear infinite;
-    }
-
-    @keyframes spin{to{transform:rotate(360deg)}}
-
-    .loading-label{
-      font-family:var(--mono);font-size:12px;
-      color:var(--text3);letter-spacing:.1em;
-    }
-
-    .error-box{
-      background:var(--red-bg);border:1px solid var(--red-bd);
-      border-radius:12px;padding:16px 20px;
-      font-size:13px;color:var(--red);margin-bottom:20px;
-      line-height:1.6;
-    }
-
-    .error-box a{color:var(--accent)}
-
-    /* ── Mobile sort ── */
-    .mobile-sort-bar{
-      display:flex;align-items:center;gap:8px;
-      padding:10px 0;overflow-x:auto;scrollbar-width:none;
-      margin-bottom:12px;
-    }
-
-    .mobile-sort-bar::-webkit-scrollbar{display:none}
-
-    @media(min-width:768px){.mobile-sort-bar{display:none}}
-
-    .sort-pill{
-      display:inline-flex;align-items:center;gap:4px;
-      font-size:11px;font-weight:500;font-family:var(--mono);
-      padding:5px 12px;border-radius:6px;flex-shrink:0;
-      border:1px solid var(--line2);background:var(--bg2);
-      color:var(--text3);cursor:pointer;transition:all .2s;
-    }
-
-    .sort-pill.active{background:var(--accent2);color:white;border-color:var(--accent2)}
-
-    /* ── Footer ── */
-    footer{
-      padding:20px 0 32px;margin-top:8px;
-      border-top:1px solid var(--line);
-    }
-
-    .footer-inner{
-      display:flex;align-items:center;
-      justify-content:space-between;flex-wrap:wrap;gap:12px;
-    }
-
-    .footer-text{font-size:12px;color:var(--text3)}
-    .footer-text a{color:var(--accent);text-decoration:none}
-
-    .btn-refresh{
-      display:flex;align-items:center;gap:8px;
-      background:var(--accent2);color:white;
-      font-family:'Outfit',sans-serif;
-      font-size:13px;font-weight:500;
-      padding:9px 20px;border:none;border-radius:8px;
-      cursor:pointer;
-      box-shadow:0 0 20px rgba(79,156,249,.25);
-      transition:opacity .2s,transform .2s;
-    }
-
-    .btn-refresh:hover{opacity:.88;transform:translateY(-1px)}
-    .btn-refresh:active{transform:scale(.97)}
-    .btn-refresh.spinning svg{animation:spin .7s linear infinite}
-
-    /* Mobile tweaks */
-    @media(max-width:480px){
-      .signal-metrics{gap:16px}
-      .best-bank{flex-direction:column;align-items:flex-start}
-      .best-bank-price{font-size:22px}
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BCCR · ¿Cuándo vender mis dólares?</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg:    #080b0f;
+    --bg2:   #0e1117;
+    --bg3:   #141820;
+    --line:  rgba(255,255,255,0.07);
+    --accent:#4f9cf9;
+    --green: #2ecc8a;
+    --red:   #f05c5c;
+    --yellow:#f0c040;
+    --t1:    #f0f4ff;
+    --t2:    #8b95a8;
+    --t3:    #4a5568;
+    --mono:  'IBM Plex Mono', monospace;
+    --sans:  'Syne', sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:var(--bg);color:var(--t1);font-family:var(--sans);min-height:100vh;
+    background-image:linear-gradient(rgba(79,156,249,0.025) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(79,156,249,0.025) 1px,transparent 1px);
+    background-size:40px 40px;
+  }
+
+  /* Header */
+  .hdr{border-bottom:1px solid var(--line);padding:14px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;background:rgba(8,11,15,0.92);backdrop-filter:blur(8px);position:sticky;top:0;z-index:10}
+  .hdr-logo{font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:2px}
+  .hdr-title{font-size:15px;font-weight:700}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--t3);display:inline-block;margin-right:5px;transition:background .3s}
+  .dot.live{background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  .btn-sm{font-family:var(--mono);font-size:11px;background:transparent;border:1px solid var(--line);border-radius:4px;padding:5px 11px;cursor:pointer;color:var(--t3);text-decoration:none;transition:all .2s}
+  .btn-sm:hover{color:var(--t1);border-color:var(--t2)}
+  .btn-accent{border-color:var(--accent);color:var(--accent)}
+  .btn-accent:hover{background:rgba(79,156,249,0.1);color:var(--accent)}
+  .btn-accent.spin{opacity:.5;pointer-events:none}
+
+  /* Container */
+  .wrap{max-width:900px;margin:0 auto;padding:24px 16px 60px}
+
+  /* Loading */
+  .load-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:50vh;gap:14px}
+  .spinner{width:30px;height:30px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .load-lbl{font-family:var(--mono);font-size:11px;color:var(--t3);letter-spacing:2px}
+
+  /* Error */
+  .err{border:1px solid rgba(240,92,92,0.3);background:rgba(240,92,92,0.05);border-radius:8px;padding:20px;margin:16px 0}
+  .err strong{color:var(--red)}
+  .err p{font-size:13px;color:var(--t2);margin-top:8px;line-height:1.6}
+  .err a{color:var(--accent)}
+
+  /* Signal hero */
+  .hero{border-radius:12px;padding:24px;margin-bottom:18px;position:relative;overflow:hidden;border:1px solid var(--line)}
+  .hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at top right,var(--hc,rgba(79,156,249,0.08)) 0%,transparent 70%);pointer-events:none}
+  .hero.v  {--hc:rgba(46,204,138,0.13);border-color:rgba(46,204,138,0.3)}
+  .hero.vp {--hc:rgba(240,192,64,0.10);border-color:rgba(240,192,64,0.3)}
+  .hero.e  {--hc:rgba(240,92,92,0.09); border-color:rgba(240,92,92,0.25)}
+  .hero.n  {--hc:rgba(79,156,249,0.08);border-color:rgba(79,156,249,0.18)}
+  .hero-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px}
+  .hero-ew{font-family:var(--mono);font-size:10px;color:var(--t3);letter-spacing:2px;margin-bottom:6px}
+  .hero-badge{font-size:26px;font-weight:800;letter-spacing:-.5px}
+  .hero.v  .hero-badge{color:var(--green)}
+  .hero.vp .hero-badge{color:var(--yellow)}
+  .hero.e  .hero-badge{color:var(--red)}
+  .hero.n  .hero-badge{color:var(--accent)}
+  .hero-icon{font-size:34px;opacity:.8}
+  .hero-detail{font-size:13px;color:var(--t2);line-height:1.7;margin-bottom:18px}
+  .hero-metrics{display:flex;gap:0;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:14px}
+  .hm{flex:1;min-width:100px;padding:0 16px 0 0}
+  .hm-lbl{font-family:var(--mono);font-size:10px;color:var(--t3);margin-bottom:3px;letter-spacing:1px}
+  .hm-val{font-family:var(--mono);font-size:17px;font-weight:600}
+  .hm-val.g{color:var(--green)}.hm-val.r{color:var(--red)}.hm-val.a{color:var(--accent)}.hm-val.d{color:var(--t3);font-size:13px}
+
+  /* KPI grid */
+  .kgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:18px}
+  .kpi{background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:14px}
+  .kpi-lbl{font-family:var(--mono);font-size:10px;color:var(--t3);letter-spacing:1px;margin-bottom:5px}
+  .kpi-val{font-family:var(--mono);font-size:20px;font-weight:600;margin-bottom:3px}
+  .kpi-val.g{color:var(--green)}.kpi-val.r{color:var(--red)}.kpi-val.a{color:var(--accent)}
+  .kpi-sub{font-size:11px;color:var(--t3)}
+  .chip{display:inline-block;font-family:var(--mono);font-size:10px;padding:3px 8px;border-radius:20px;margin-top:5px}
+  .chip.cg{background:rgba(46,204,138,0.15);color:var(--green)}
+  .chip.cr{background:rgba(240,92,92,0.15);color:var(--red)}
+  .chip.ca{background:rgba(79,156,249,0.12);color:var(--accent)}
+  .chip.cy{background:rgba(240,192,64,0.12);color:var(--yellow)}
+
+  /* Card */
+  .card{background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:20px;margin-bottom:18px}
+  .card-ttl{font-size:14px;font-weight:700;margin-bottom:3px}
+  .card-sub{font-family:var(--mono);font-size:10px;color:var(--t3);letter-spacing:1px;margin-bottom:14px}
+
+  /* Best bank */
+  .best{background:linear-gradient(135deg,rgba(46,204,138,0.08),rgba(46,204,138,0.03));border:1px solid rgba(46,204,138,0.2);border-radius:10px;padding:16px 20px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+  .best-lbl{font-family:var(--mono);font-size:10px;color:var(--t3);letter-spacing:1px;margin-bottom:2px}
+  .best-name{font-size:14px;font-weight:700;color:var(--green)}
+  .best-price{font-family:var(--mono);font-size:24px;font-weight:600;color:var(--green)}
+  .best-sub{font-size:11px;color:var(--t3)}
+
+  /* Quincena */
+  .qcard{background:rgba(79,156,249,0.05);border:1px solid rgba(79,156,249,0.15);border-radius:10px;padding:16px 20px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+  .q-lbl{font-family:var(--mono);font-size:10px;color:var(--t3);letter-spacing:1px;margin-bottom:2px}
+  .q-val{font-family:var(--mono);font-size:24px;font-weight:600;color:var(--accent)}
+  .q-advice{font-family:var(--mono);font-size:11px;margin-top:4px}
+  .q-advice.v{color:var(--green)}.q-advice.e{color:var(--yellow)}.q-advice.n{color:var(--t3)}
+
+  /* Indicadores */
+  .ind-hdr{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+  .ind-row{display:flex;gap:20px;flex-wrap:wrap;padding-top:12px;border-top:1px solid var(--line)}
+  .ind-item .ind-lbl{font-family:var(--mono);font-size:10px;color:var(--t3);margin-bottom:3px}
+  .ind-item .ind-val{font-family:var(--mono);font-size:20px;font-weight:600}
+
+  /* Largo plazo */
+  .lp-row{display:flex;gap:14px;flex-wrap:wrap;padding-top:12px;border-top:1px solid var(--line)}
+  .lp-item .lp-lbl{font-family:var(--mono);font-size:10px;color:var(--t3);margin-bottom:3px}
+  .lp-item .lp-val{font-family:var(--mono);font-size:17px;font-weight:600}
+
+  /* Chart */
+  .ptabs{display:flex;gap:4px;margin-bottom:12px}
+  .ptab{font-family:var(--mono);font-size:11px;background:transparent;color:var(--t3);border:1px solid var(--line);border-radius:4px;padding:4px 10px;cursor:pointer;transition:all .2s}
+  .ptab:hover{color:var(--t1)}
+  .ptab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .chart-wrap{position:relative;height:220px}
+
+  /* Tabla predicción */
+  .pred-tbl{width:100%;border-collapse:collapse;font-size:13px}
+  .pred-tbl th{font-family:var(--mono);font-size:10px;color:var(--t3);text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);letter-spacing:1px}
+  .pred-tbl td{padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.03)}
+  .pred-tbl tr:hover td{background:rgba(255,255,255,0.02)}
+  .pd{font-family:var(--mono);font-size:11px;color:var(--t2)}
+  .pv{font-family:var(--mono);font-size:13px;font-weight:600}
+  .pv.pu{color:var(--green)}.pv.pd2{color:var(--red)}.pv.pf{color:var(--t2)}
+  .dv{font-family:var(--mono);font-size:11px}
+  .dv.du{color:var(--green)}.dv.dd{color:var(--red)}.dv.df{color:var(--t3)}
+  .mom{font-family:var(--mono);font-size:11px}
+  .mom.mp{color:var(--green)}.mom.mn{color:var(--red)}.mom.mz{color:var(--t3)}
+  .mbar{height:4px;background:var(--bg3);border-radius:2px;width:56px}
+  .mbar-fill{height:4px;background:var(--accent);border-radius:2px}
+  .pred-note{font-family:var(--mono);font-size:10px;color:var(--t3);margin-top:10px;line-height:1.7}
+
+  /* Footer */
+  .footer{font-family:var(--mono);font-size:10px;color:var(--t3);text-align:center;padding:28px 0 10px;letter-spacing:1px}
+  .footer a{color:var(--t3)}
+
+  @media(max-width:500px){
+    .hero-badge{font-size:20px}
+    .hero-metrics{gap:10px}
+    .hm{min-width:80px}
+    .kgrid{grid-template-columns:1fr 1fr}
+  }
+</style>
 </head>
 <body>
 
-<div class="wrapper">
+<header class="hdr">
+  <div>
+    <div class="hdr-logo">BCCR ANALYTICS</div>
+    <div class="hdr-title">¿Cuándo vender mis dólares?</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <span style="font-family:var(--mono);font-size:11px;color:var(--t3)">
+      <span class="dot" id="dot"></span><span id="statusTxt">Conectando...</span>
+    </span>
+    <a class="btn-sm" href="https://rmeneses14.github.io/tipoCambioFront">← Ventanilla</a>
+    <button class="btn-sm btn-accent" id="refreshBtn" onclick="doRefresh()">↺ Actualizar</button>
+  </div>
+</header>
 
-  <!-- Header -->
-  <header>
-    <div class="header-inner">
-      <div class="brand">
-        <div class="brand-icon">📈</div>
-        <div class="brand-text">
-          <h1>BCCR <em>Analytics</em></h1>
-          <div class="brand-sub">Tipo de cambio · Análisis & Predicción</div>
-        </div>
-      </div>
-      <div class="header-right">
-        <a href="https://rmeneses14.github.io/tipoCambioFront" class="btn-nav">← Ventanilla</a>
-        <div class="ticker">
-          <div class="ticker-dot"></div>
-          <span id="statusText">Conectando...</span>
-        </div>
-      </div>
-    </div>
-  </header>
-
-  <!-- Main -->
-  <div id="mainContent">
-    <div class="loading-state">
+<div class="wrap">
+  <div id="mc">
+    <div class="load-wrap">
       <div class="spinner"></div>
-      <div class="loading-label">CONSULTANDO BCCR · WS HISTÓRICO</div>
+      <div class="load-lbl">CONSULTANDO API · BCCR</div>
     </div>
   </div>
+</div>
 
-  <footer>
-    <div class="footer-inner">
-      <div class="footer-text">
-        Fuente: <a href="https://gee.bccr.fi.cr" target="_blank">BCCR</a> ·
-        API: <a href="https://bccr-hist.onrender.com/docs" target="_blank">bccr-hist.onrender.com</a> ·
-        Predicción referencial — regresión lineal 30d
-      </div>
-      <button class="btn-refresh" id="btnRefresh">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <path d="M23 4v6h-6M1 20v-6h6"/>
-          <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
-        </svg>
-        Actualizar
-      </button>
-    </div>
-  </footer>
+<div class="footer">
+  Fuente: <a href="https://gee.bccr.fi.cr" target="_blank">BCCR</a> ·
+  API: <a href="https://bccr-hist.onrender.com/docs" target="_blank">bccr-hist.onrender.com</a> ·
+  Solo referencial — no es asesoría financiera
 </div>
 
 <script>
 const API = 'https://bccr-hist.onrender.com';
-const fmt  = n => n != null ? '₡' + Number(n).toLocaleString('es-CR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
-const fmtN = n => n != null ? Number(n).toLocaleString('es-CR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
+let chart = null, hist = [], analisis = null, lp = null, days = 30;
 
-let chartInstance = null;
-let allHistorico  = [];
-let analisis      = null;
-let largoplazo    = null;
-let sortCol = null, sortDir = 'asc';
+const fmt  = v => v != null ? '₡' + Number(v).toLocaleString('es-CR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
+const fmtN = v => v != null ? Number(v).toLocaleString('es-CR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
+const fmtP = v => v != null ? v + '%' : '—';
 
-// ── Load ──────────────────────────────────────────────────────────────────
-function fetchWithTimeout(url, ms) {
-  ms = ms || 50000;
-  var ctrl = new AbortController();
-  var id = setTimeout(function() { ctrl.abort(); }, ms);
-  return fetch(url, { signal: ctrl.signal }).finally(function() { clearTimeout(id); });
+function timeout(url, ms) {
+  const c = new AbortController();
+  const t = setTimeout(() => c.abort(), ms);
+  return fetch(url, { signal: c.signal }).finally(() => clearTimeout(t));
 }
 
 async function loadAll() {
-  setStatus('loading');
-  document.getElementById('mainContent').innerHTML = `
-    <div class="loading-state">
-      <div class="spinner"></div>
-      <div class="loading-label">CONSULTANDO BCCR · WS HISTÓRICO</div>
-    </div>`;
+  document.getElementById('dot').className = 'dot';
+  document.getElementById('statusTxt').textContent = 'Consultando...';
+  document.getElementById('mc').innerHTML =
+    '<div class="load-wrap"><div class="spinner"></div><div class="load-lbl">CONSULTANDO API · BCCR</div></div>';
 
   try {
-    // Análisis (crítico)
-    let resA;
-    try {
-      resA = await fetchWithTimeout(API + '/analisis', 50000);
-    } catch(e) {
-      if (e.name === 'AbortError') {
-        throw new Error('TIMEOUT (50s): El WS del BCCR tardó demasiado. Esto es intermitente, reintentá en unos minutos.');
-      }
-      throw new Error('Sin conexión con la API: ' + e.message);
+    // Análisis — crítico
+    let res;
+    try { res = await timeout(API + '/analisis', 60000); }
+    catch(e) {
+      throw new Error(e.name === 'AbortError'
+        ? 'El servidor tardó más de 60s (cold start en Render). Esperá y reintentá.'
+        : 'Sin conexión: ' + e.message);
     }
-
-    if (!resA.ok) {
-      let detail = 'HTTP ' + resA.status;
-      try {
-        const j = await resA.json();
-        detail += ': ' + JSON.stringify(j.detail || j);
-      } catch(_) {}
-      throw new Error(detail);
+    if (!res.ok) {
+      let d = 'HTTP ' + res.status;
+      try { const j = await res.json(); d += ': ' + (j.detail || JSON.stringify(j)); } catch(_){}
+      throw new Error(d);
     }
+    analisis = await res.json();
 
-    analisis = await resA.json();
-
-    // Histórico (no crítico)
+    // Histórico — no crítico
     try {
-      const resH = await fetchWithTimeout(API + '/historico?dias=30', 30000);
-      if (resH.ok) {
-        const hj = await resH.json();
-        allHistorico = hj.datos || [];
-      }
-    } catch(_) {}
+      const rh = await timeout(API + '/historico?dias=30', 30000);
+      if (rh.ok) { const j = await rh.json(); hist = j.datos || []; }
+    } catch(_){}
 
-    // Histórico largo plazo (no crítico)
+    // Largo plazo — no crítico
     try {
-      const resLP = await fetchWithTimeout(API + '/historico-largo-plazo', 20000);
-      if (resLP.ok) {
-        largoplazo = await resLP.json();
-      }
-    } catch(_) {}
+      const rl = await timeout(API + '/historico-largo-plazo', 20000);
+      if (rl.ok) { lp = await rl.json(); }
+    } catch(_){}
 
-    renderDashboard();
-    setStatus('ok');
+    render();
+    document.getElementById('dot').className = 'dot live';
+    document.getElementById('statusTxt').textContent =
+      new Date().toLocaleTimeString('es-CR',{hour:'2-digit',minute:'2-digit'});
 
   } catch(e) {
-    const msg = e.message || 'Error desconocido';
-    const isWS = msg.includes('TIMEOUT') || msg.includes('503');
-    document.getElementById('mainContent').innerHTML =
-      '<div class="error-box">' +
-      '<strong>⚠️ ' + (isWS ? 'El WS del BCCR no respondió' : 'Error al conectar con la API') + '</strong>' +
-      '<br><br>' + msg +
-      (isWS ? '<br><br>El servidor <code>gee.bccr.fi.cr</code> a veces bloquea IPs de servidores cloud (Render/AWS). ' +
-        'Probá directamente: <a href="' + API + '/analisis" target="_blank">' + API + '/analisis</a>' : '') +
-      '</div>' +
-      '<div style="text-align:center;padding:20px 0">' +
-      '<button class="btn-refresh" onclick="loadAll()" style="margin:0 auto">🔄 &nbsp;Reintentar</button>' +
-      '</div>';
-    setStatus('error');
+    document.getElementById('dot').className = 'dot';
+    document.getElementById('statusTxt').textContent = 'Error';
+    document.getElementById('mc').innerHTML =
+      `<div class="err"><strong>⚠️ No se pudo cargar</strong>
+       <p>${e.message}</p>
+       <p>API: <a href="${API}/analisis" target="_blank">${API}/analisis</a></p></div>
+       <div style="text-align:center;padding:16px">
+         <button class="btn-sm btn-accent" onclick="loadAll()">↺ Reintentar</button>
+       </div>`;
   }
 }
 
-function setStatus(s) {
-  const txt = document.getElementById('statusText');
-  const dot = document.querySelector('.ticker-dot');
-  if (s === 'ok') {
-    dot.style.background = '#2ecc8a';
-    dot.style.boxShadow  = '0 0 8px #2ecc8a';
-    txt.textContent = 'EN VIVO · ' + new Date().toLocaleTimeString('es-CR');
-  } else if (s === 'error') {
-    dot.style.background = '#f05c5c';
-    dot.style.boxShadow  = 'none';
-    txt.textContent = 'ERROR';
-  } else {
-    dot.style.background = '#f0c040';
-    dot.style.boxShadow  = '0 0 8px #f0c040';
-    txt.textContent = 'CARGANDO...';
-  }
+function doRefresh() {
+  const b = document.getElementById('refreshBtn');
+  b.classList.add('spin');
+  analisis = null; hist = []; lp = null;
+  loadAll().finally(() => b.classList.remove('spin'));
 }
 
-// ── Render ────────────────────────────────────────────────────────────────
-function renderDashboard() {
+function render() {
   const a = analisis;
-  const sc = a.señal?.startsWith('VENDER AHORA') ? 'comprar'
-           : a.señal?.startsWith('VENDER — PRECIO') ? 'comprar'
-           : a.señal?.startsWith('VENDER (precio') ? 'esperar'
-           : a.señal === 'ESPERAR' ? 'neutral'
-           : 'neutral';
-  const si = a.señal?.startsWith('VENDER AHORA') ? '💰'
-           : a.señal?.startsWith('VENDER — PRECIO') ? '📈'
-           : a.señal?.startsWith('VENDER (precio') ? '⚠️'
-           : a.señal === 'ESPERAR' ? '⏳'
-           : '🔍';
+  if (!a) return;
 
-  const tendIcon  = a.tendencia_7d === 'alza' ? '↑' : a.tendencia_7d === 'baja' ? '↓' : '→';
-  const tendClass = a.tendencia_7d === 'alza' ? 'chip-up' : a.tendencia_7d === 'baja' ? 'chip-down' : 'chip-flat';
-  const tendLabel = a.tendencia_7d === 'alza' ? 'ALZA' : a.tendencia_7d === 'baja' ? 'BAJA' : 'ESTABLE';
-  const tendValClass = a.tendencia_7d === 'alza' ? 'up' : a.tendencia_7d === 'baja' ? 'down' : 'neutral';
+  // Clase del hero según señal
+  const s = (a.señal || '').toUpperCase();
+  const hc = s === 'VENDER' ? 'v' : s === 'VENDER PRONTO' ? 'vp' : s === 'ESPERAR' ? 'e' : 'n';
+  const hi = s === 'VENDER' ? '💰' : s === 'VENDER PRONTO' ? '⚡' : s === 'ESPERAR' ? '⏳' : '🔍';
+
+  // Tendencia del precio de VENTA
+  const tend = a.tendencia_7d || 'estable';
+  const tendIcon  = tend === 'alza' ? '↑' : tend === 'baja' ? '↓' : '→';
+  const tendChip  = tend === 'alza' ? 'cr' : tend === 'baja' ? 'cg' : 'ca';
+  // Para vendedor: baja es BUENO (precio bajando = malo), alza es BUENO (más colones)
+  const tendTxt   = tend === 'alza' ? 'PRECIO SUBIENDO ✓' : tend === 'baja' ? 'PRECIO BAJANDO ✗' : 'ESTABLE';
+
+  // Diferencia venta hoy vs promedio 30d
+  const vh = a.precio_venta_hoy, p30v = a.promedio_venta_30d;
+  const dv = (vh != null && p30v) ? vh - p30v : null;
 
   // Quincena
-  const hoy = new Date();
+  const hoy  = new Date();
   const proxQ = hoy.getDate() <= 15
     ? new Date(hoy.getFullYear(), hoy.getMonth(), 15)
     : new Date(hoy.getFullYear(), hoy.getMonth()+1, 1);
   const diasQ = Math.ceil((proxQ - hoy) / 86400000);
-  const pred15 = a.prediccion_15d || [];
-  const predQ  = pred15.find(p => Math.abs(new Date(p.fecha+'T12:00:00') - proxQ) < 3*86400000)
-               || pred15[pred15.length-1];
+  const pred  = a.prediccion_15d || [];
+  const predQ = pred.find(p => Math.abs(new Date(p.fecha+'T12:00:00') - proxQ) < 3*86400000)
+              || pred[pred.length-1];
 
-  // Diff hoy vs promedio 30d
-  const diffVsProm = a.precio_compra_hoy && a.promedio_compra_30d
-    ? a.precio_compra_hoy - a.promedio_compra_30d : 0;
-  const diffSign = diffVsProm >= 0 ? '+' : '';
-  const diffClass = diffVsProm < 0 ? 'green' : diffVsProm > 0 ? 'red' : 'accent';
+  // Consejo quincena — comparar precio estimado quincena vs precio VENTA hoy
+  let qCls = 'n', qTxt = '—';
+  if (predQ && vh) {
+    const d = predQ.compra_estimada - vh;
+    if (d > 1)       { qCls = 'e'; qTxt = `↑ Se estima ${fmtN(d)} más — podría esperar`; }
+    else if (d < -1) { qCls = 'v'; qTxt = `↓ Se estima ${fmtN(Math.abs(d))} menos — mejor vender pronto`; }
+    else             { qCls = 'n'; qTxt = '→ Sin diferencia significativa'; }
+  }
 
-  // Prediction rows
-  const predRows = pred15.map((p,i) => {
-    const prev = i === 0 ? a.precio_compra_hoy : pred15[i-1].compra_estimada;
-    const diff = p.compra_estimada - (prev || p.compra_estimada);
-    const cls  = diff > 0.5 ? 'pred-up' : diff < -0.5 ? 'pred-down' : 'pred-flat';
-    const diffCls = diff > 0.5 ? 'diff-up' : diff < -0.5 ? 'diff-down' : 'diff-flat';
-    const ico  = diff > 0.5 ? '↑' : diff < -0.5 ? '↓' : '→';
-    const d = new Date(p.fecha+'T12:00:00');
-    const label = d.toLocaleDateString('es-CR',{weekday:'short',day:'numeric',month:'short'});
-    const rMin = a.minimo_compra_90d, rMax = a.maximo_compra_90d;
+  // Señal de tasas
+  const st = a.señal_tasas || 'NEUTRAL';
+  const stChip = st.includes('FORTALECE') ? 'cr' : st.includes('DÓLAR') ? 'cg' : 'ca';
+
+  // Filas predicción
+  const rows = pred.map((p, i) => {
+    const prev = i === 0 ? (vh || p.compra_estimada) : pred[i-1].compra_estimada;
+    const d    = p.compra_estimada - prev;
+    // Vendedor: precio sube = bueno = verde
+    const vc   = d > 0.5 ? 'pu' : d < -0.5 ? 'pd2' : 'pf';
+    const dc   = d > 0.5 ? 'du' : d < -0.5 ? 'dd'  : 'df';
+    const ico  = d > 0.5 ? '↑' : d < -0.5 ? '↓' : '→';
+    const lbl  = new Date(p.fecha+'T12:00:00')
+                   .toLocaleDateString('es-CR',{weekday:'short',day:'numeric',month:'short'});
+    const rMin = a.minimo_compra_90d || 450, rMax = a.maximo_compra_90d || 520;
     const pct  = rMax > rMin ? Math.max(0,Math.min(100,((p.compra_estimada-rMin)/(rMax-rMin))*100)) : 50;
-
-    // Highlight quincena
-    const isQ = predQ && p.fecha === predQ.fecha;
-    const rowStyle = isQ ? 'background:rgba(79,156,249,0.06);' : '';
-
-    const momStr = p.momentum_diario != null
-      ? (p.momentum_diario >= 0 ? '+' : '') + p.momentum_diario.toFixed(2)
-      : '';
-    const momCls = p.momentum_diario > 0.1 ? 'style="color:var(--red)"'
-                 : p.momentum_diario < -0.1 ? 'style="color:var(--green)"'
-                 : 'style="color:var(--text3)"';
-    return `<tr style="${rowStyle}">
-      <td><span class="pred-date">${label}${isQ ? ' <span style="color:var(--accent);font-size:10px">◀ QUINCENA</span>' : ''}</span></td>
-      <td><span class="pred-val ${cls}">${fmt(p.compra_estimada)}</span></td>
-      <td><span class="pred-diff ${diffCls}">${ico} ${diff>=0?'+':''}${fmtN(diff)}</span></td>
-      <td><span class="pred-date" ${momCls}>${momStr}</span></td>
-      <td style="min-width:60px"><div class="mini-bar"><div class="mini-bar-fill" style="width:${pct}%"></div></div></td>
+    const isQ  = predQ && p.fecha === predQ.fecha;
+    const mom  = p.momentum_diario;
+    const mc   = mom >  0.1 ? 'mp' : mom < -0.1 ? 'mn' : 'mz';
+    const mt   = mom != null ? (mom >= 0 ? '+' : '') + mom.toFixed(2) : '';
+    return `<tr style="${isQ?'background:rgba(79,156,249,0.06)':''}">
+      <td><span class="pd">${lbl}${isQ?' <span style="color:var(--accent);font-size:9px">◀ QUINCENA</span>':''}</span></td>
+      <td><span class="pv ${vc}">${fmt(p.compra_estimada)}</span></td>
+      <td><span class="dv ${dc}">${ico} ${d>=0?'+':''}${fmtN(d)}</span></td>
+      <td><span class="mom ${mc}">${mt}</span></td>
+      <td><div class="mbar"><div class="mbar-fill" style="width:${pct}%"></div></div></td>
     </tr>`;
   }).join('');
 
-  document.getElementById('mainContent').innerHTML = `
+  document.getElementById('mc').innerHTML = `
 
-    <!-- Signal hero -->
-    <div class="signal-hero ${sc}">
-      <div class="signal-top">
+    <!-- Señal principal -->
+    <div class="hero ${hc}">
+      <div class="hero-top">
         <div>
-          <div class="signal-eyebrow">¿Cuándo vender sus dólares? · Precio de venta USD/CRC</div>
-          <div class="signal-badge">${a.señal}</div>
+          <div class="hero-ew">RECOMENDACIÓN · PRECIO DE VENTA USD/CRC</div>
+          <div class="hero-badge">${hi} ${a.señal || 'NEUTRAL'}</div>
         </div>
-        <div class="signal-icon">${si}</div>
+        <span class="chip ${tendChip}">${tendIcon} ${tendTxt}</span>
       </div>
-      <div class="signal-detail">${a.señal_detalle}</div>
-      <div class="signal-metrics">
-        <div class="signal-metric">
-          <div class="signal-metric-label">Venta hoy</div>
-          <div class="signal-metric-val ${a.precio_venta_hoy > a.promedio_venta_30d ? 'green' : 'red'}">${fmt(a.precio_venta_hoy)}</div>
+      <div class="hero-detail">${a.señal_detalle || ''}</div>
+      <div class="hero-metrics">
+        <div class="hm">
+          <div class="hm-lbl">VENTA HOY</div>
+          <div class="hm-val ${dv >= 0 ? 'g' : 'r'}">${fmt(vh)}</div>
         </div>
-        <div class="signal-metric">
-          <div class="signal-metric-label">Prom. venta 30d</div>
-          <div class="signal-metric-val accent">${fmt(a.promedio_venta_30d)}</div>
+        <div class="hm">
+          <div class="hm-lbl">PROM. VENTA 30D</div>
+          <div class="hm-val a">${fmt(p30v)}</div>
         </div>
-        <div class="signal-metric">
-          <div class="signal-metric-label">Mín. venta 30d</div>
-          <div class="signal-metric-val red">${fmt(a.minimo_compra_90d)}</div>
+        <div class="hm">
+          <div class="hm-lbl">DIFERENCIA</div>
+          <div class="hm-val ${dv >= 0 ? 'g' : 'r'}">${dv != null ? (dv>=0?'+':'') + fmtN(dv) : '—'}</div>
         </div>
-        <div class="signal-metric">
-          <div class="signal-metric-label">Máx. venta 30d</div>
-          <div class="signal-metric-val green">${fmt(a.maximo_compra_90d)}</div>
-        </div>
-        <div class="signal-metric">
-          <div class="signal-metric-label">Actualizado</div>
-          <div class="signal-metric-val" style="font-size:12px;color:var(--text3)">${a.fecha_consulta}</div>
+        <div class="hm">
+          <div class="hm-lbl">COMPRA (REF)</div>
+          <div class="hm-val d">${fmt(a.precio_compra_hoy)}</div>
         </div>
       </div>
     </div>
 
     <!-- KPIs -->
-    <div class="kpi-grid">
-      <div class="kpi" id="k0">
-        <div class="kpi-label">💰 Venta hoy — lo que recibís</div>
-        <div class="kpi-val ${a.precio_venta_hoy > a.promedio_venta_30d ? 'up' : 'down'}">${fmt(a.precio_venta_hoy)}</div>
-        <div class="kpi-sub">Por cada dólar que vendás hoy</div>
-        <span class="kpi-chip ${a.precio_venta_hoy >= a.promedio_venta_30d ? 'chip-down' : 'chip-up'}">
-          ${a.precio_venta_hoy >= a.promedio_venta_30d ? '↑ Sobre' : '↓ Bajo'} promedio 30d
-        </span>
+    <div class="kgrid">
+      <div class="kpi">
+        <div class="kpi-lbl">MÁXIMO VENTA 30D</div>
+        <div class="kpi-val g">${fmt(a.maximo_compra_90d)}</div>
+        <div class="kpi-sub">El mejor precio reciente</div>
+        <span class="chip cg">↑ Mejor</span>
       </div>
-      <div class="kpi" id="k1">
-        <div class="kpi-label">Compra hoy (referencia)</div>
-        <div class="kpi-val" style="font-size:16px;color:var(--text3)">${fmt(a.precio_compra_hoy)}</div>
-        <div class="kpi-sub">Lo que pagan los bancos por sus dólares</div>
+      <div class="kpi">
+        <div class="kpi-lbl">MÍNIMO VENTA 30D</div>
+        <div class="kpi-val r">${fmt(a.minimo_compra_90d)}</div>
+        <div class="kpi-sub">El peor precio reciente</div>
+        <span class="chip cr">↓ Peor</span>
       </div>
-      <div class="kpi" id="k2">
-        <div class="kpi-label">Tendencia 7 días</div>
-        <div class="kpi-val ${tendValClass}">${tendLabel}</div>
-        <div class="kpi-sub">Últimos 7 días hábiles</div>
-        <span class="kpi-chip ${tendClass}">${tendIcon} ${tendLabel}</span>
+      <div class="kpi">
+        <div class="kpi-lbl">PROM. COMPRA 30D</div>
+        <div class="kpi-val" style="color:var(--t2)">${fmt(a.promedio_compra_30d)}</div>
+        <div class="kpi-sub">Lo que pagan los bancos</div>
       </div>
-      <div class="kpi" id="k3">
-        <div class="kpi-label">Próxima quincena</div>
-        <div class="kpi-val accent">${diasQ}d</div>
-        <div class="kpi-sub">${proxQ.toLocaleDateString('es-CR',{day:'numeric',month:'short',year:'numeric'})}</div>
-        ${predQ ? `<span class="kpi-chip chip-flat">${fmt(predQ.compra_estimada)} estimado</span>` : ''}
+      <div class="kpi">
+        <div class="kpi-lbl">DÍAS A QUINCENA</div>
+        <div class="kpi-val ${diasQ <= 3 ? 'r' : 'a'}">${diasQ}d</div>
+        <div class="kpi-sub">${proxQ.toLocaleDateString('es-CR',{day:'numeric',month:'long'})}</div>
       </div>
     </div>
 
-    <!-- Tasas BCCR + Señal -->
-    <div class="section-card" style="margin-bottom:20px;padding:18px 20px">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px">
-        <div>
-          <div class="section-title" style="font-size:15px">Indicadores Monetarios BCCR</div>
-          <div class="section-sub">Política monetaria — influencia directa en el tipo de cambio</div>
-        </div>
-        <span class="kpi-chip ${a.señal_tasas === 'COLÓN FUERTE' ? 'chip-down' : a.señal_tasas === 'DÓLAR FUERTE' ? 'chip-up' : 'chip-flat'}" style="font-size:12px;padding:5px 14px">
-          ${a.señal_tasas}
-        </span>
-      </div>
-      <div style="display:flex;gap:24px;flex-wrap:wrap;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
-        <div>
-          <div class="kpi-label">Tasa Básica Pasiva</div>
-          <div class="kpi-val" style="font-size:20px;color:var(--accent)">${a.tasa_basica_pasiva != null ? a.tasa_basica_pasiva + '%' : '—'}</div>
-        </div>
-        <div>
-          <div class="kpi-label">TPM</div>
-          <div class="kpi-val" style="font-size:20px">${a.tpm != null ? a.tpm + '%' : '—'}</div>
-        </div>
-        <div>
-          <div class="kpi-label">FPC</div>
-          <div class="kpi-val" style="font-size:20px;color:var(--green)">${a.fpc != null ? a.fpc + '%' : '—'}</div>
-        </div>
-        <div>
-          <div class="kpi-label">FPD</div>
-          <div class="kpi-val" style="font-size:20px;color:var(--red)">${a.fpd != null ? a.fpd + '%' : '—'}</div>
-        </div>
-      </div>
-      ${a.señal_tasas_detalle ? `<div style="margin-top:12px;font-size:13px;color:var(--text2);line-height:1.6">${a.señal_tasas_detalle}</div>` : ''}
-    </div>
-
-    <!-- Referencia histórica MONEX -->
-    ${largoplazo ? `
-    <div class="section-card" style="margin-bottom:20px;padding:18px 20px">
-      <div class="section-title" style="font-size:15px;margin-bottom:4px">Referencia Histórica MONEX</div>
-      <div class="section-sub" style="margin-bottom:14px">Promedio tipo de cambio largo plazo — Banco Central CR</div>
-      <div style="display:flex;gap:20px;flex-wrap:wrap;padding-top:14px;border-top:1px solid var(--line)">
-        <div>
-          <div class="kpi-label">Promedio ${new Date().getFullYear()}</div>
-          <div class="kpi-val" style="font-size:18px;color:var(--accent)">${fmt(largoplazo.promedio_monex_anio_actual)}</div>
-        </div>
-        <div>
-          <div class="kpi-label">Promedio ${new Date().getFullYear()-1}</div>
-          <div class="kpi-val" style="font-size:18px">${fmt(largoplazo.promedio_monex_anio_anterior)}</div>
-        </div>
-        <div>
-          <div class="kpi-label">Promedio histórico</div>
-          <div class="kpi-val" style="font-size:18px;color:var(--yellow)">${fmt(largoplazo.promedio_monex_historico)}</div>
-        </div>
-        <div>
-          <div class="kpi-label">Mínimo histórico</div>
-          <div class="kpi-val" style="font-size:18px;color:var(--green)">${fmt(largoplazo.minimo_monex_historico)}</div>
-        </div>
-        <div>
-          <div class="kpi-label">Máximo histórico</div>
-          <div class="kpi-val" style="font-size:18px;color:var(--red)">${fmt(largoplazo.maximo_monex_historico)}</div>
-        </div>
-      </div>
-    </div>
-    ` : ''}
-
-    <!-- Best bank -->
-    <div class="best-bank">
-      <div class="best-bank-left">
-        <div class="best-bank-icon">🏆</div>
-        <div>
-          <div class="best-bank-name">${a.mejor_entidad_compra}</div>
-          <div class="best-bank-label">Mejor precio de compra disponible hoy en ventanilla</div>
-        </div>
-      </div>
+    <!-- Mejor entidad -->
+    <div class="best">
       <div>
-        <div class="best-bank-price">${fmt(a.mejor_precio_compra)}</div>
-        <div class="best-bank-sub">por dólar</div>
+        <div class="best-lbl">MEJOR PRECIO DE VENTA HOY (VENTANILLA)</div>
+        <div class="best-name">${a.mejor_entidad_compra || '—'}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="best-price">${fmt(a.mejor_precio_compra)}</div>
+        <div class="best-sub">por dólar vendido</div>
       </div>
     </div>
 
-    <!-- Chart -->
-    <div class="section-card">
-      <div class="section-header">
-        <div>
-          <div class="section-title">Precio de Venta USD / CRC</div>
-          <div class="section-sub">Venta (lo que recibís) · EMA-7 · EMA-14 · Promedio 30d · Referencia histórica</div>
-        </div>
-        <div class="period-tabs">
-          <button class="period-tab" data-days="7">7D</button>
-          <button class="period-tab" data-days="15">15D</button>
-          <button class="period-tab active" data-days="30">30D</button>
-        </div>
+    <!-- Quincena -->
+    <div class="qcard">
+      <div>
+        <div class="q-lbl">PRÓXIMA QUINCENA</div>
+        <div style="font-size:13px;color:var(--t2)">${proxQ.toLocaleDateString('es-CR',{day:'numeric',month:'long',year:'numeric'})}</div>
+        <div class="q-advice ${qCls}">${qTxt}</div>
       </div>
-      <div class="chart-wrap">
-        <canvas id="chartMain"></canvas>
+      <div style="text-align:right">
+        <div class="q-lbl">DÍAS RESTANTES</div>
+        <div class="q-val">${diasQ}</div>
+        ${predQ ? `<div style="font-family:var(--mono);font-size:11px;color:var(--t3)">Est. ${fmt(predQ.compra_estimada)}</div>` : ''}
       </div>
     </div>
 
-    <!-- Prediction -->
-    <div class="section-card">
-      <div class="section-header">
+    <!-- Indicadores monetarios -->
+    <div class="card">
+      <div class="ind-hdr">
         <div>
-          <div class="section-title">¿Cuándo vender? — Proyección 15 días hábiles</div>
-          <div class="section-sub">EMA + momentum + patrón semanal + señal de tasas BCCR · Solo referencial</div>
+          <div class="card-ttl">Indicadores Monetarios BCCR</div>
+          <div class="card-sub">TBP ALTA = COLÓN SE FORTALECE = PRECIO DE VENTA BAJA</div>
         </div>
+        <span class="chip ${stChip}">${st}</span>
       </div>
-
-      <div class="quincenal-grid">
-        <div class="q-card">
-          <div class="q-label">⏱ Días para quincena</div>
-          <div class="q-val" style="color:var(--accent)">${diasQ}</div>
-          <div class="q-sub">${proxQ.toLocaleDateString('es-CR',{weekday:'long',day:'numeric',month:'long'})}</div>
-        </div>
-        <div class="q-card">
-          <div class="q-label">📊 Precio estimado ese día</div>
-          <div class="q-val">${predQ ? fmt(predQ.compra_estimada) : '—'}</div>
-          <div class="q-sub">
-            ${predQ && a.precio_venta_hoy ? (() => {
-              const diff = predQ.compra_estimada - a.precio_venta_hoy;
-              const diffCRC = Math.round(diff * 1000);
-              if (diff > 1.5)
-                return \`↑ Precio estimado ₡\${fmtN(diff)} mayor — considere esperar (ganaría ₡\${diffCRC.toLocaleString()} por $1,000)\`;
-              else if (diff < -1.5)
-                return \`↓ Precio estimado ₡\${fmtN(Math.abs(diff))} menor — vender antes de la quincena (perdería ₡\${Math.abs(diffCRC).toLocaleString()} por $1,000)\`;
-              else
-                return \`≈ Precio similar a hoy — sin ventaja clara en esperar\`;
-            })() : '—'}
-          </div>
-        </div>
+      ${a.señal_tasas_detalle ? `<div style="font-size:13px;color:var(--t2);line-height:1.7;margin-bottom:10px">${a.señal_tasas_detalle}</div>` : ''}
+      <div class="ind-row">
+        <div class="ind-item"><div class="ind-lbl">TASA BÁSICA PASIVA</div><div class="ind-val" style="color:var(--accent)">${fmtP(a.tasa_basica_pasiva)}</div></div>
+        <div class="ind-item"><div class="ind-lbl">TPM</div><div class="ind-val">${fmtP(a.tpm)}</div></div>
+        <div class="ind-item"><div class="ind-lbl">FPC</div><div class="ind-val" style="color:var(--green)">${fmtP(a.fpc)}</div></div>
+        <div class="ind-item"><div class="ind-lbl">FPD</div><div class="ind-val" style="color:var(--red)">${fmtP(a.fpd)}</div></div>
       </div>
+    </div>
 
-      <!-- Mobile sort -->
-      <div class="mobile-sort-bar">
-        <span style="font-size:10px;color:var(--text3);white-space:nowrap;font-family:var(--mono)">ORDENAR:</span>
-        <span class="sort-pill" data-col="fecha">FECHA</span>
-        <span class="sort-pill" data-col="compra_estimada">COMPRA</span>
+    <!-- Largo plazo -->
+    ${lp ? `
+    <div class="card">
+      <div class="card-ttl">Referencia Histórica MONEX</div>
+      <div class="card-sub">CONTEXTO DE LARGO PLAZO — BANCO CENTRAL CR</div>
+      <div class="lp-row">
+        <div class="lp-item"><div class="lp-lbl">PROM. ${new Date().getFullYear()}</div><div class="lp-val" style="color:var(--accent)">${fmt(lp.promedio_monex_anio_actual)}</div></div>
+        <div class="lp-item"><div class="lp-lbl">PROM. ${new Date().getFullYear()-1}</div><div class="lp-val">${fmt(lp.promedio_monex_anio_anterior)}</div></div>
+        <div class="lp-item"><div class="lp-lbl">PROM. HISTÓRICO</div><div class="lp-val" style="color:var(--yellow)">${fmt(lp.promedio_monex_historico)}</div></div>
+        <div class="lp-item"><div class="lp-lbl">MÍNIMO HIST.</div><div class="lp-val" style="color:var(--green)">${fmt(lp.minimo_monex_historico)}</div></div>
+        <div class="lp-item"><div class="lp-lbl">MÁXIMO HIST.</div><div class="lp-val" style="color:var(--red)">${fmt(lp.maximo_monex_historico)}</div></div>
       </div>
+    </div>` : ''}
 
-      <div class="pred-scroll">
-        <table class="pred-table">
-          <thead>
-            <tr>
-              <th>Fecha</th>
-              <th>Compra estimada</th>
-              <th>Variación</th>
-              <th>Momentum</th>
-              <th title="% que está la predicción sobre el promedio de venta 30d. Verde = sobre promedio = mejor para vender">Nivel vs prom.30d ⓘ</th>
-            </tr>
-          </thead>
-          <tbody>${predRows}</tbody>
+    <!-- Gráfico -->
+    <div class="card">
+      <div class="card-ttl">Precio de Venta USD/CRC</div>
+      <div class="card-sub" style="margin-bottom:10px">LO QUE RECIBÍS POR CADA DÓLAR · EMA-7 · EMA-14 · PREDICCIÓN</div>
+      <div class="ptabs" id="ptabs">
+        <button class="ptab" data-d="7">7D</button>
+        <button class="ptab" data-d="15">15D</button>
+        <button class="ptab active" data-d="30">30D</button>
+      </div>
+      <div class="chart-wrap"><canvas id="chart"></canvas></div>
+    </div>
+
+    <!-- Predicción -->
+    <div class="card">
+      <div class="card-ttl">¿Cuándo vender? — Proyección 15 días hábiles</div>
+      <div class="card-sub">EMA + MOMENTUM + PATRÓN SEMANAL + SEÑAL TASAS · SOLO REFERENCIAL</div>
+      <div style="overflow-x:auto">
+        <table class="pred-tbl">
+          <thead><tr>
+            <th>FECHA</th>
+            <th>VENTA EST.</th>
+            <th>VARIACIÓN</th>
+            <th>MOMENTUM</th>
+            <th>NIVEL 30D</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
         </table>
+      </div>
+      <div class="pred-note">
+        MOMENTUM: positivo (+) → precio sube → más colones para vos ✓ · negativo (−) → precio baja → menos colones ✗<br>
+        NIVEL 30D: barra muestra posición del precio estimado dentro del rango mín/máx de los últimos 30 días
       </div>
     </div>
   `;
 
-  // Animate KPIs
-  [0,1,2,3].forEach(i => setTimeout(() => document.getElementById('k'+i)?.classList.add('visible'), i*80));
+  // Inicializar chart
+  setTimeout(() => renderChart(days), 50);
 
-  // Chart
-  renderChart(30);
-
-  // Period tabs
-  document.querySelectorAll('.period-tab').forEach(tab =>
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('.period-tab').forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      renderChart(parseInt(tab.dataset.days));
-    })
-  );
+  // Tabs
+  document.querySelectorAll('.ptab').forEach(t => {
+    t.addEventListener('click', () => {
+      document.querySelectorAll('.ptab').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+      days = parseInt(t.dataset.d);
+      renderChart(days);
+    });
+  });
 }
 
-// ── Chart ─────────────────────────────────────────────────────────────────
-function renderChart(days) {
-  if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
-
-  const hist = allHistorico.slice(-days);
-  const pred = (analisis?.prediccion_15d || []);
-
-  const hLabels = hist.map(d => {
-    const dt = new Date(d.fecha+'T12:00:00');
-    return dt.toLocaleDateString('es-CR',{day:'numeric',month:'short'});
+// ── Chart ──────────────────────────────────────────────────────────────────
+function ema(arr, k) {
+  const a = 2 / (k+1); let p = null;
+  return arr.map(v => {
+    if (v == null) return null;
+    if (p === null) { p = v; return Math.round(v*100)/100; }
+    p = v*a + p*(1-a); return Math.round(p*100)/100;
   });
-  const pLabels = pred.map(p => {
-    const dt = new Date(p.fecha+'T12:00:00');
-    return dt.toLocaleDateString('es-CR',{day:'numeric',month:'short'});
-  });
+}
 
-  const allLabels  = [...hLabels, ...pLabels];
-  const compraData = [...hist.map(d => d.compra), ...new Array(pLabels.length).fill(null)];
-  const ventaData  = [...hist.map(d => d.venta),  ...new Array(pLabels.length).fill(null)];
+function renderChart(d) {
+  const a = analisis; if (!a) return;
+  const cv = document.getElementById('chart'); if (!cv) return;
 
-  // Calcular EMA sobre datos históricos para el gráfico
-  function calcEMA(arr, k) {
-    const period = k;
-    const alpha = 2 / (period + 1);
-    const result = [];
-    let prev = null;
-    for (const v of arr) {
-      if (v == null) { result.push(null); continue; }
-      if (prev === null) { prev = v; result.push(Math.round(v * 100) / 100); continue; }
-      prev = v * alpha + prev * (1 - alpha);
-      result.push(Math.round(prev * 100) / 100);
-    }
-    return result;
-  }
-  const rawCompra = hist.map(d => d.compra);
-  const ema7Data  = calcEMA(rawCompra, 7);
-  const ema14Data = calcEMA(rawCompra, 14);
-  const predData   = [
-    ...new Array(hLabels.length - 1).fill(null),
-    hist[hist.length-1]?.compra ?? null,
-    ...pred.map(p => p.compra_estimada)
-  ];
-  const prom30 = analisis?.promedio_compra_30d;
-  const promLine = allLabels.map(() => prom30);
-  const promHistMonex = largoplazo?.promedio_monex_historico;
-  const promHistLine  = promHistMonex ? allLabels.map(() => promHistMonex) : null;
+  const h   = hist.slice(-d);
+  const pr  = a.prediccion_15d || [];
+  const hl  = h.map(x => new Date(x.fecha+'T12:00:00').toLocaleDateString('es-CR',{day:'numeric',month:'short'}));
+  const pl  = pr.map(x => new Date(x.fecha+'T12:00:00').toLocaleDateString('es-CR',{day:'numeric',month:'short'}));
+  const all = [...hl, ...pl];
+  const nl  = pl.length;
 
-  const ctx = document.getElementById('chartMain').getContext('2d');
+  const vData  = [...h.map(x=>x.venta),  ...new Array(nl).fill(null)];
+  const cData  = [...h.map(x=>x.compra), ...new Array(nl).fill(null)];
+  const pData  = [...new Array(hl.length).fill(null), ...pr.map(x=>x.compra_estimada)];
+  const e7     = [...ema(h.map(x=>x.venta), 7),  ...new Array(nl).fill(null)];
+  const e14    = [...ema(h.map(x=>x.venta), 14), ...new Array(nl).fill(null)];
+  const promL  = all.map(() => a.promedio_venta_30d);
+  const histL  = lp?.promedio_monex_historico ? all.map(() => lp.promedio_monex_historico) : null;
 
-  const gradCompra = ctx.createLinearGradient(0,0,0,300);
-  gradCompra.addColorStop(0, 'rgba(46,204,138,0.15)');
-  gradCompra.addColorStop(1, 'rgba(46,204,138,0.01)');
+  if (chart) { chart.destroy(); chart = null; }
+  const ctx = cv.getContext('2d');
+  const grad = ctx.createLinearGradient(0,0,0,220);
+  grad.addColorStop(0,'rgba(46,204,138,0.14)');
+  grad.addColorStop(1,'rgba(46,204,138,0)');
 
-  chartInstance = new Chart(ctx, {
+  chart = new Chart(ctx, {
     type: 'line',
-    data: {
-      labels: allLabels,
-      datasets: [
-        {
-          label: 'Compra (ref)',
-          data: compraData,
-          borderColor: '#f05c5c',
-          backgroundColor: 'transparent',
-          borderWidth: 1.5,
-          fill: false,
-          tension: 0.35,
-          pointRadius: 0,
-          pointHoverRadius: 5,
-          pointHoverBackgroundColor: '#2ecc8a',
-        },
-        {
-          label: 'Venta (recibís) 💰',
-          data: ventaData,
-          borderColor: '#2ecc8a',
-          backgroundColor: gradCompra,
-          borderWidth: 2.5,
-          fill: true,
-          tension: 0.35,
-          pointRadius: 0,
-          pointHoverRadius: 5,
-          pointHoverBackgroundColor: '#2ecc8a',
-        },
-        {
-          label: 'Predicción',
-          data: predData,
-          borderColor: '#4f9cf9',
-          backgroundColor: 'transparent',
-          borderWidth: 2,
-          borderDash: [5,4],
-          fill: false,
-          tension: 0.3,
-          pointRadius: 3,
-          pointBackgroundColor: '#4f9cf9',
-          pointHoverRadius: 6,
-        },
-        {
-          label: `Prom. 30d (${fmt(prom30)})`,
-          data: promLine,
-          borderColor: 'rgba(240,192,64,0.4)',
-          backgroundColor: 'transparent',
-          borderWidth: 1,
-          borderDash: [3,4],
-          fill: false,
-          tension: 0,
-          pointRadius: 0,
-        },
-        {
-          label: 'EMA-7',
-          data: [...ema7Data, ...new Array(pLabels.length).fill(null)],
-          borderColor: 'rgba(160,100,255,0.7)',
-          backgroundColor: 'transparent',
-          borderWidth: 1.5,
-          borderDash: [2,3],
-          fill: false,
-          tension: 0.3,
-          pointRadius: 0,
-        },
-        {
-          label: 'EMA-14',
-          data: [...ema14Data, ...new Array(pLabels.length).fill(null)],
-          borderColor: 'rgba(255,160,50,0.5)',
-          backgroundColor: 'transparent',
-          borderWidth: 1.5,
-          borderDash: [2,3],
-          fill: false,
-          tension: 0.3,
-          pointRadius: 0,
-        },
-        ...(promHistLine ? [{
-          label: `Prom. histórico MONEX (${fmt(promHistMonex)})`,
-          data: promHistLine,
-          borderColor: 'rgba(255,255,255,0.2)',
-          backgroundColor: 'transparent',
-          borderWidth: 1,
-          borderDash: [6,4],
-          fill: false,
-          tension: 0,
-          pointRadius: 0,
-        }] : []),
-      ],
-    },
+    data: { labels: all, datasets: [
+      { label:'Venta 💰', data:vData, borderColor:'#2ecc8a', backgroundColor:grad, borderWidth:2.5, fill:true, tension:.35, pointRadius:0, pointHoverRadius:5 },
+      { label:'Compra (ref)', data:cData, borderColor:'rgba(240,92,92,0.35)', backgroundColor:'transparent', borderWidth:1, fill:false, tension:.35, pointRadius:0 },
+      { label:'Predicción', data:pData, borderColor:'rgba(79,156,249,0.8)', backgroundColor:'rgba(79,156,249,0.05)', borderWidth:1.5, borderDash:[4,3], fill:true, tension:.3, pointRadius:0, pointHoverRadius:4 },
+      { label:'Prom. venta 30d', data:promL, borderColor:'rgba(240,192,64,0.45)', backgroundColor:'transparent', borderWidth:1, borderDash:[3,4], fill:false, tension:0, pointRadius:0 },
+      { label:'EMA-7', data:e7,  borderColor:'rgba(160,100,255,0.55)', backgroundColor:'transparent', borderWidth:1.5, borderDash:[2,3], fill:false, tension:.3, pointRadius:0 },
+      { label:'EMA-14', data:e14, borderColor:'rgba(255,160,50,0.45)', backgroundColor:'transparent', borderWidth:1.5, borderDash:[2,3], fill:false, tension:.3, pointRadius:0 },
+      ...(histL ? [{ label:'Prom. histórico MONEX', data:histL, borderColor:'rgba(255,255,255,0.12)', backgroundColor:'transparent', borderWidth:1, borderDash:[6,4], fill:false, tension:0, pointRadius:0 }] : [])
+    ]},
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { mode:'index', intersect:false },
+      responsive:true, maintainAspectRatio:false,
+      interaction:{ intersect:false, mode:'index' },
       plugins: {
-        legend: {
-          position: 'bottom',
-          labels: {
-            font: { family:'IBM Plex Mono', size:11 },
-            color: '#506070',
-            boxWidth: 14,
-            padding: 16,
-          },
-        },
-        tooltip: {
-          backgroundColor: '#141920',
-          titleColor: '#e8edf5',
-          bodyColor: '#8fa3bc',
-          borderColor: 'rgba(255,255,255,0.1)',
-          borderWidth: 1,
-          padding: 12,
-          titleFont: { family:'IBM Plex Mono', size:11 },
-          bodyFont:  { family:'IBM Plex Mono', size:12 },
-          callbacks: {
-            label: ctx => {
-              if (ctx.parsed.y == null) return null;
-              return ` ${ctx.dataset.label}: ₡${ctx.parsed.y.toLocaleString('es-CR',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
-            }
-          }
+        legend:{ labels:{ color:'#4a5568', font:{ family:"'IBM Plex Mono'", size:10 }, boxWidth:12, padding:10 }},
+        tooltip:{ backgroundColor:'#0e1117', borderColor:'rgba(255,255,255,0.08)', borderWidth:1, titleColor:'#f0f4ff', bodyColor:'#8b95a8', titleFont:{ family:"'IBM Plex Mono'", size:11 }, bodyFont:{ family:"'IBM Plex Mono'", size:11 },
+          callbacks:{ label: c => c.parsed.y == null ? null : ` ${c.dataset.label}: ₡${c.parsed.y.toLocaleString('es-CR',{minimumFractionDigits:2})}` }
         }
       },
-      scales: {
-        x: {
-          grid: { color:'rgba(255,255,255,0.04)' },
-          ticks: {
-            font: { family:'IBM Plex Mono', size:10 },
-            color: '#506070',
-            maxTicksLimit: 10,
-            maxRotation: 0,
-          },
-        },
-        y: {
-          grid: { color:'rgba(255,255,255,0.04)' },
-          ticks: {
-            font: { family:'IBM Plex Mono', size:10 },
-            color: '#506070',
-            callback: v => '₡' + v.toLocaleString('es-CR'),
-          },
-        },
-      },
-    },
+      scales:{
+        x:{ ticks:{ color:'#4a5568', font:{family:"'IBM Plex Mono'",size:9}, maxRotation:0, maxTicksLimit:8 }, grid:{ color:'rgba(255,255,255,0.03)' }},
+        y:{ ticks:{ color:'#4a5568', font:{family:"'IBM Plex Mono'",size:9}, callback: v => '₡' + v.toLocaleString('es-CR') }, grid:{ color:'rgba(255,255,255,0.04)' }}
+      }
+    }
   });
 }
-
-// ── Events ────────────────────────────────────────────────────────────────
-document.getElementById('btnRefresh').addEventListener('click', () => {
-  const btn = document.getElementById('btnRefresh');
-  btn.classList.add('spinning');
-  loadAll().finally(() => btn.classList.remove('spinning'));
-});
 
 loadAll();
 </script>
