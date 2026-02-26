@@ -538,6 +538,13 @@ let analisis      = null;
 let sortCol = null, sortDir = 'asc';
 
 // ── Load ──────────────────────────────────────────────────────────────────
+function fetchWithTimeout(url, ms) {
+  ms = ms || 50000;
+  var ctrl = new AbortController();
+  var id = setTimeout(function() { ctrl.abort(); }, ms);
+  return fetch(url, { signal: ctrl.signal }).finally(function() { clearTimeout(id); });
+}
+
 async function loadAll() {
   setStatus('loading');
   document.getElementById('mainContent').innerHTML = `
@@ -547,28 +554,53 @@ async function loadAll() {
     </div>`;
 
   try {
-    const [resA, resH] = await Promise.all([
-      fetch(`${API}/analisis`),
-      fetch(`${API}/historico?dias=180`)
-    ]);
+    // Análisis (crítico)
+    let resA;
+    try {
+      resA = await fetchWithTimeout(API + '/analisis', 50000);
+    } catch(e) {
+      if (e.name === 'AbortError') {
+        throw new Error('TIMEOUT (50s): El WS del BCCR tardó demasiado. Esto es intermitente, reintentá en unos minutos.');
+      }
+      throw new Error('Sin conexión con la API: ' + e.message);
+    }
 
-    if (!resA.ok) throw new Error(`analisis: ${resA.status}`);
+    if (!resA.ok) {
+      let detail = 'HTTP ' + resA.status;
+      try {
+        const j = await resA.json();
+        detail += ': ' + JSON.stringify(j.detail || j);
+      } catch(_) {}
+      throw new Error(detail);
+    }
+
     analisis = await resA.json();
 
-    if (resH.ok) {
-      const hj = await resH.json();
-      allHistorico = hj.datos || [];
-    }
+    // Histórico (no crítico)
+    try {
+      const resH = await fetchWithTimeout(API + '/historico?dias=30', 30000);
+      if (resH.ok) {
+        const hj = await resH.json();
+        allHistorico = hj.datos || [];
+      }
+    } catch(_) {}
 
     renderDashboard();
     setStatus('ok');
+
   } catch(e) {
-    document.getElementById('mainContent').innerHTML = `
-      <div class="error-box">
-        ⚠️ <strong>No se pudo conectar con la API.</strong><br>
-        El servicio en Render puede estar iniciando (cold start ~30s). Intenta de nuevo.<br>
-        <small style="opacity:.6">Error: ${e.message}</small>
-      </div>`;
+    const msg = e.message || 'Error desconocido';
+    const isWS = msg.includes('TIMEOUT') || msg.includes('503');
+    document.getElementById('mainContent').innerHTML =
+      '<div class="error-box">' +
+      '<strong>⚠️ ' + (isWS ? 'El WS del BCCR no respondió' : 'Error al conectar con la API') + '</strong>' +
+      '<br><br>' + msg +
+      (isWS ? '<br><br>El servidor <code>gee.bccr.fi.cr</code> a veces bloquea IPs de servidores cloud (Render/AWS). ' +
+        'Probá directamente: <a href="' + API + '/analisis" target="_blank">' + API + '/analisis</a>' : '') +
+      '</div>' +
+      '<div style="text-align:center;padding:20px 0">' +
+      '<button class="btn-refresh" onclick="loadAll()" style="margin:0 auto">🔄 &nbsp;Reintentar</button>' +
+      '</div>';
     setStatus('error');
   }
 }
@@ -730,9 +762,9 @@ function renderDashboard() {
           <div class="section-sub">Compra · Venta · Predicción · Promedio 30d</div>
         </div>
         <div class="period-tabs">
-          <button class="period-tab" data-days="30">30D</button>
-          <button class="period-tab active" data-days="90">90D</button>
-          <button class="period-tab" data-days="180">180D</button>
+          <button class="period-tab" data-days="7">7D</button>
+          <button class="period-tab" data-days="15">15D</button>
+          <button class="period-tab active" data-days="30">30D</button>
         </div>
       </div>
       <div class="chart-wrap">
@@ -795,7 +827,7 @@ function renderDashboard() {
   [0,1,2,3].forEach(i => setTimeout(() => document.getElementById('k'+i)?.classList.add('visible'), i*80));
 
   // Chart
-  renderChart(90);
+  renderChart(30);
 
   // Period tabs
   document.querySelectorAll('.period-tab').forEach(tab =>
