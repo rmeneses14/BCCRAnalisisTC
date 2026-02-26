@@ -535,6 +535,7 @@ const fmtN = n => n != null ? Number(n).toLocaleString('es-CR',{minimumFractionD
 let chartInstance = null;
 let allHistorico  = [];
 let analisis      = null;
+let largoplazo    = null;
 let sortCol = null, sortDir = 'asc';
 
 // ── Load ──────────────────────────────────────────────────────────────────
@@ -582,6 +583,14 @@ async function loadAll() {
       if (resH.ok) {
         const hj = await resH.json();
         allHistorico = hj.datos || [];
+      }
+    } catch(_) {}
+
+    // Histórico largo plazo (no crítico)
+    try {
+      const resLP = await fetchWithTimeout(API + '/historico-largo-plazo', 20000);
+      if (resLP.ok) {
+        largoplazo = await resLP.json();
       }
     } catch(_) {}
 
@@ -746,6 +755,68 @@ function renderDashboard() {
       </div>
     </div>
 
+    <!-- Tasas BCCR + Señal -->
+    <div class="section-card" style="margin-bottom:20px;padding:18px 20px">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px">
+        <div>
+          <div class="section-title" style="font-size:15px">Indicadores Monetarios BCCR</div>
+          <div class="section-sub">Política monetaria — influencia directa en el tipo de cambio</div>
+        </div>
+        <span class="kpi-chip ${a.señal_tasas === 'COLÓN FUERTE' ? 'chip-down' : a.señal_tasas === 'DÓLAR FUERTE' ? 'chip-up' : 'chip-flat'}" style="font-size:12px;padding:5px 14px">
+          ${a.señal_tasas}
+        </span>
+      </div>
+      <div style="display:flex;gap:24px;flex-wrap:wrap;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
+        <div>
+          <div class="kpi-label">Tasa Básica Pasiva</div>
+          <div class="kpi-val" style="font-size:20px;color:var(--accent)">${a.tasa_basica_pasiva != null ? a.tasa_basica_pasiva + '%' : '—'}</div>
+        </div>
+        <div>
+          <div class="kpi-label">TPM</div>
+          <div class="kpi-val" style="font-size:20px">${a.tpm != null ? a.tpm + '%' : '—'}</div>
+        </div>
+        <div>
+          <div class="kpi-label">FPC</div>
+          <div class="kpi-val" style="font-size:20px;color:var(--green)">${a.fpc != null ? a.fpc + '%' : '—'}</div>
+        </div>
+        <div>
+          <div class="kpi-label">FPD</div>
+          <div class="kpi-val" style="font-size:20px;color:var(--red)">${a.fpd != null ? a.fpd + '%' : '—'}</div>
+        </div>
+      </div>
+      ${a.señal_tasas_detalle ? `<div style="margin-top:12px;font-size:13px;color:var(--text2);line-height:1.6">${a.señal_tasas_detalle}</div>` : ''}
+    </div>
+
+    <!-- Referencia histórica MONEX -->
+    ${largoplazo ? `
+    <div class="section-card" style="margin-bottom:20px;padding:18px 20px">
+      <div class="section-title" style="font-size:15px;margin-bottom:4px">Referencia Histórica MONEX</div>
+      <div class="section-sub" style="margin-bottom:14px">Promedio tipo de cambio largo plazo — Banco Central CR</div>
+      <div style="display:flex;gap:20px;flex-wrap:wrap;padding-top:14px;border-top:1px solid var(--line)">
+        <div>
+          <div class="kpi-label">Promedio ${new Date().getFullYear()}</div>
+          <div class="kpi-val" style="font-size:18px;color:var(--accent)">${fmt(largoplazo.promedio_monex_anio_actual)}</div>
+        </div>
+        <div>
+          <div class="kpi-label">Promedio ${new Date().getFullYear()-1}</div>
+          <div class="kpi-val" style="font-size:18px">${fmt(largoplazo.promedio_monex_anio_anterior)}</div>
+        </div>
+        <div>
+          <div class="kpi-label">Promedio histórico</div>
+          <div class="kpi-val" style="font-size:18px;color:var(--yellow)">${fmt(largoplazo.promedio_monex_historico)}</div>
+        </div>
+        <div>
+          <div class="kpi-label">Mínimo histórico</div>
+          <div class="kpi-val" style="font-size:18px;color:var(--green)">${fmt(largoplazo.minimo_monex_historico)}</div>
+        </div>
+        <div>
+          <div class="kpi-label">Máximo histórico</div>
+          <div class="kpi-val" style="font-size:18px;color:var(--red)">${fmt(largoplazo.maximo_monex_historico)}</div>
+        </div>
+      </div>
+    </div>
+    ` : ''}
+
     <!-- Best bank -->
     <div class="best-bank">
       <div class="best-bank-left">
@@ -891,6 +962,8 @@ function renderChart(days) {
   ];
   const prom30 = analisis?.promedio_compra_30d;
   const promLine = allLabels.map(() => prom30);
+  const promHistMonex = largoplazo?.promedio_monex_historico;
+  const promHistLine  = promHistMonex ? allLabels.map(() => promHistMonex) : null;
 
   const ctx = document.getElementById('chartMain').getContext('2d');
 
@@ -973,6 +1046,17 @@ function renderChart(days) {
           tension: 0.3,
           pointRadius: 0,
         },
+        ...(promHistLine ? [{
+          label: `Prom. histórico MONEX (${fmt(promHistMonex)})`,
+          data: promHistLine,
+          borderColor: 'rgba(255,255,255,0.2)',
+          backgroundColor: 'transparent',
+          borderWidth: 1,
+          borderDash: [6,4],
+          fill: false,
+          tension: 0,
+          pointRadius: 0,
+        }] : []),
       ],
     },
     options: {
